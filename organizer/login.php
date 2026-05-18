@@ -5,62 +5,34 @@ include('../config/db.php');
 $message = "";
 
 if (isset($_POST['login'])) {
-
     $email = trim($_POST['email']);
     $password = $_POST['password'];
 
     if (empty($email) || empty($password)) {
-        $message = "Please fill in all fields.";
+        $message = "Please enter email and password.";
     } else {
-
-        $stmt = $conn->prepare("SELECT * FROM users WHERE email=? AND role='organizer' LIMIT 1");
+        $stmt = $conn->prepare(
+            "SELECT * FROM users WHERE email = ? AND role = 'organizer' LIMIT 1"
+        );
         $stmt->bind_param("s", $email);
         $stmt->execute();
         $result = $stmt->get_result();
 
-        if ($result->num_rows > 0) {
-
+        if ($result->num_rows === 1) {
             $user = $result->fetch_assoc();
 
-            if (password_verify($password, $user['password'])) {
-
-                if (isset($user['organizer_status']) && $user['organizer_status'] === 'blocked') {
-
-                    echo "
-                    <!DOCTYPE html>
-                    <html lang='en'>
-                    <head>
-                        <meta charset='UTF-8'>
-                        <title>Account Blocked</title>
-                        <script src='https://cdn.jsdelivr.net/npm/sweetalert2@11'></script>
-                    </head>
-                    <body>
-                        <script>
-                            Swal.fire({
-                                icon: 'error',
-                                title: 'Account Blocked!',
-                                text: 'Your organizer account has been blocked by admin due to policy violations.',
-                                confirmButtonColor: '#dc2626',
-                                confirmButtonText: 'Back to Login'
-                            }).then(() => {
-                                window.location.href='login.php';
-                            });
-                        </script>
-                    </body>
-                    </html>";
-                    exit();
-                }
-
+            if ($user['status'] === 'rejected') {
+                $message = "Your organizer account is blocked/rejected.";
+            } elseif (password_verify($password, $user['password'])) {
                 $_SESSION['organizer_id'] = $user['id'];
                 $_SESSION['organizer_name'] = $user['name'];
+                $_SESSION['organizer_email'] = $user['email'];
 
                 header("Location: dashboard.php");
                 exit();
-
             } else {
                 $message = "Incorrect password.";
             }
-
         } else {
             $message = "Organizer account not found.";
         }

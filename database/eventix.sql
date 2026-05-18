@@ -41,7 +41,7 @@ VALUES (
     'Admin',
     'admin@eventix.com',
     '0000000000',
-    MD5('admin123'),
+    echo password_hash("admin123", PASSWORD_DEFAULT);
     'admin',
     'approved'
-);
+); 

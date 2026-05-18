@@ -445,29 +445,7 @@
                     </a>
                 </div>
 
-                <!-- Optional Stats -->
-                <!-- <div class="row mt-5 g-4 justify-content-center">
-                    <div class="col-md-3 col-6">
-                        <div class="detail-box text-center">
-                            <h3 class="text-white">3</h3>
-                            <p class="text-secondary mb-0">Main Panels</p>
-                        </div>
-                    </div>
-
-                    <div class="col-md-3 col-6">
-                        <div class="detail-box text-center">
-                            <h3 class="text-white">100%</h3>
-                            <p class="text-secondary mb-0">Interlinked System</p>
-                        </div>
-                    </div>
-
-                    <div class="col-md-3 col-6">
-                        <div class="detail-box text-center">
-                            <h3 class="text-white">PHP</h3>
-                            <p class="text-secondary mb-0">Backend Powered</p>
-                        </div>
-                    </div>
-                </div> -->
+               
 
             </div>
         </div>

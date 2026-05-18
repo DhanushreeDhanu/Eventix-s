@@ -13,28 +13,36 @@ if (isset($_POST['register'])) {
 
     if (!preg_match("/^[A-Za-z ]+$/", $name)) {
         $message = "Name should contain only letters and spaces.";
+    } elseif (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+        $message = "Invalid email address.";
     } elseif ($password !== $confirm_password) {
         $message = "Passwords do not match.";
     } elseif (strlen($password) < 8) {
         $message = "Password must be at least 8 characters.";
     } else {
-        $hashed_password = md5($password);
+        $stmt = $conn->prepare("SELECT id FROM users WHERE email = ? LIMIT 1");
+        $stmt->bind_param("s", $email);
+        $stmt->execute();
+        $result = $stmt->get_result();
 
-        $check_email = mysqli_query($conn, "SELECT * FROM users WHERE email='$email'");
-
-        if (mysqli_num_rows($check_email) > 0) {
+        if ($result->num_rows > 0) {
             $message = "Email already exists.";
         } else {
-            $sql = "INSERT INTO users (name, email, phone, password, role, status)
-                    VALUES ('$name', '$email', '$phone', '$hashed_password', 'organizer', 'approved')";
+            $hashed_password = password_hash($password, PASSWORD_DEFAULT);
 
-            if (mysqli_query($conn, $sql)) {
-    echo "<script>
-            alert('Organizer registered successfully!');
-            window.location.href='login.php';
-          </script>";
-    exit();
-} else {
+            $stmt = $conn->prepare(
+                "INSERT INTO users (name, email, phone, password, role, status)
+                 VALUES (?, ?, ?, ?, 'organizer', 'approved')"
+            );
+            $stmt->bind_param("ssss", $name, $email, $phone, $hashed_password);
+
+            if ($stmt->execute()) {
+                echo "<script>
+                    alert('Organizer registered successfully!');
+                    window.location.href='login.php';
+                </script>";
+                exit();
+            } else {
                 $message = "Registration failed.";
             }
         }
@@ -50,8 +58,7 @@ if (isset($_POST['register'])) {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link rel="stylesheet"
-          href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
 
     <style>
         body {
@@ -230,12 +237,6 @@ if (isset($_POST['register'])) {
                     Create your organizer account
                 </p>
 
-                <?php if ($message != "") { ?>
-                    <div class="alert alert-info">
-                        <?php echo $message; ?>
-                    </div>
-                <?php } ?>
-
                 <form method="POST" autocomplete="off" onsubmit="return validateForm();">
 
                     <div class="mb-3">
@@ -340,7 +341,24 @@ if (isset($_POST['register'])) {
     © 2026 Eventix | Organizer Registration
 </footer>
 
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
 <script>
+// Check if PHP has any alert messages to display via SweetAlert
+<?php if ($message != "") { ?>
+    Swal.fire({
+        icon: '<?php echo $alert_type; ?>',
+        title: '<?php echo ($alert_type == "success") ? "Registration Successful!" : "Registration Failed"; ?>',
+        text: '<?php echo $message; ?>',
+        confirmButtonColor: '#2563eb',
+        confirmButtonText: '<?php echo ($alert_type == "success") ? "Go to Login" : "Try Again"; ?>'
+    }).then(() => {
+        <?php if ($alert_type == "success") { ?>
+            window.location='login.php';
+        <?php } ?>
+    });
+<?php } ?>
+
 function onlyLetters(event) {
     const char = String.fromCharCode(event.which);
     if (!/[a-zA-Z ]/.test(char)) {
