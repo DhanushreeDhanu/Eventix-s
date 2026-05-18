@@ -1,0 +1,41 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: Arial, sans-serif;
+    background: #f8f9fa;
+}
+
+.navbar-brand {
+    font-size: 28px;
+    letter-spacing: 1px;
+}
+
+.hero-section {
+    min-height: 80vh;
+    display: flex;
+    align-items: center;
+    background: linear-gradient(135deg, #111827, #4f46e5);
+    color: white;
+}
+
+.card {
+    border-radius: 18px;
+    transition: 0.3s ease;
+}
+
+.card:hover {
+    transform: translateY(-8px);
+}
+
+.btn {
+    border-radius: 25px;
+    padding: 10px 25px;
+}
+
+footer {
+    margin-top: 40px;
+}
