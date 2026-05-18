@@ -32,7 +32,7 @@ if (isset($_POST['register'])) {
 
             $stmt = $conn->prepare(
                 "INSERT INTO users (name, email, phone, password, role, status)
-                 VALUES (?, ?, ?, ?, 'organizer', 'approved')"
+                 VALUES (?, ?, ?, ?, 'organizer', 'pending')"
             );
             $stmt->bind_param("ssss", $name, $email, $phone, $hashed_password);
 
