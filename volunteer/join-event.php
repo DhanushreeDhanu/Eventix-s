@@ -12,45 +12,57 @@ if (!isset($_GET['event_id'])) {
     exit();
 }
 
-$volunteer_id = $_SESSION['volunteer_id'];
+$volunteer_id = intval($_SESSION['volunteer_id']);
 $event_id = intval($_GET['event_id']);
 
-/* Check event exists */
-$event_stmt = $conn->prepare("SELECT * FROM events WHERE id=? AND status='upcoming' AND event_date >= CURDATE()");
+// Authenticate that requested operational asset node is alive, upcoming, and within chronological range
+$event_stmt = $conn->prepare("SELECT * FROM events WHERE id = ? AND status = 'upcoming' AND event_date >= CURDATE()");
 $event_stmt->bind_param("i", $event_id);
 $event_stmt->execute();
 $event = $event_stmt->get_result()->fetch_assoc();
 
+// FIXED: Defends the view layer from attempting to parse non-existent associative array properties
 if (!$event) {
     header("Location: available-events.php");
     exit();
 }
 
-/* Check already joined */
-$check = $conn->prepare("SELECT id FROM volunteer_events WHERE volunteer_id=? AND event_id=?");
+// Initial status state lookup for the initial page load layout
+$check = $conn->prepare("SELECT id FROM volunteer_events WHERE volunteer_id = ? AND event_id = ?");
 $check->bind_param("ii", $volunteer_id, $event_id);
 $check->execute();
 $check->store_result();
 
-if ($check->num_rows > 0) {
-    $status = "already";
-} else {
-    $status = "new";
-}
+$status = ($check->num_rows > 0) ? "already" : "new";
+$check->close();
 
-/* Join event */
-if (isset($_POST['join_event']) && $status == "new") {
+// ----------------------------------------------------
+// REGISTRATION TRANSACTION MANAGEMENT DISPATCHER
+// ----------------------------------------------------
+if (isset($_POST['join_event'])) {
+    // FIXED: Double-check the status to eliminate race-condition multi-tab bypass loopholes
+    $recheck = $conn->prepare("SELECT id FROM volunteer_events WHERE volunteer_id = ? AND event_id = ?");
+    $recheck->bind_param("ii", $volunteer_id, $event_id);
+    $recheck->execute();
+    $recheck->store_result();
 
-    $stmt = $conn->prepare("INSERT INTO volunteer_events
-        (volunteer_id, event_id, attendance_status, payment_status, joined_at)
-        VALUES (?, ?, 'pending', 'pending', NOW())");
-
-    $stmt->bind_param("ii", $volunteer_id, $event_id);
-
-    if ($stmt->execute()) {
-        $status = "joined";
+    if ($recheck->num_rows > 0) {
+        $status = "already";
+        $recheck->close();
     } else {
-        $status = "error";
+        $recheck->close();
+        
+        $stmt = $conn->prepare("INSERT INTO volunteer_events 
+            (volunteer_id, event_id, attendance_status, payment_status, joined_at) 
+            VALUES (?, ?, 'pending', 'pending', NOW())");
+        $stmt->bind_param("ii", $volunteer_id, $event_id);
+
+        if ($stmt->execute()) {
+            $status = "joined";
+        } else {
+            $status = "error";
+        }
+        $stmt->close();
     }
 }
 ?>
@@ -62,135 +74,92 @@ if (isset($_POST['join_event']) && $status == "new") {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link rel="stylesheet"
-          href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 
     <style>
         body {
             min-height: 100vh;
-            background:
+            background: 
                 radial-gradient(circle at top left, rgba(124,58,237,.35), transparent 35%),
                 radial-gradient(circle at bottom right, rgba(34,211,238,.22), transparent 30%),
                 linear-gradient(135deg, #050816, #15162c, #4f46e5);
-            font-family: "Segoe UI", sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
             color: white;
         }
 
         .navbar {
             background: rgba(5,8,22,.9);
             backdrop-filter: blur(15px);
+            border-bottom: 1px solid rgba(255,255,255,0.05);
         }
 
         .brand-box {
-            width: 42px;
-            height: 42px;
-            border-radius: 14px;
+            width: 42px; height: 42px; border-radius: 14px;
             background: linear-gradient(135deg, #7c3aed, #22d3ee);
-            display: inline-grid;
-            place-items: center;
-            margin-right: 10px;
+            display: inline-grid; place-items: center; margin-right: 10px;
         }
 
-        .wrapper {
-            padding: 60px 0;
-        }
+        .wrapper { padding: 60px 0; }
 
         .join-card {
             background: rgba(255,255,255,.98);
-            color: #111827;
-            border-radius: 32px;
-            padding: 35px;
+            color: #111827; border-radius: 32px; padding: 35px;
             box-shadow: 0 30px 90px rgba(0,0,0,.35);
         }
 
         .event-type {
-            display: inline-block;
-            padding: 7px 15px;
-            border-radius: 999px;
-            background: rgba(124,58,237,.12);
-            color: #6d28d9;
-            font-weight: 800;
-            font-size: 13px;
-            margin-bottom: 14px;
+            display: inline-block; padding: 7px 15px; border-radius: 999px;
+            background: rgba(124,58,237,.12); color: #6d28d9;
+            font-weight: 800; font-size: 13px; margin-bottom: 14px;
+            text-transform: uppercase; letter-spacing: 0.5px;
         }
 
-        .info-line {
-            margin-top: 13px;
-            color: #4b5563;
-            overflow-wrap: anywhere;
-        }
-
-        .info-line i {
-            width: 25px;
-            color: #7c3aed;
-        }
+        .info-line { margin-top: 13px; color: #4b5563; overflow-wrap: anywhere; }
+        .info-line i { width: 25px; color: #7c3aed; }
 
         .section-box {
-            background: #f8fafc;
-            border: 1px solid #e5e7eb;
-            border-radius: 18px;
-            padding: 17px;
-            margin-top: 16px;
-            color: #374151;
-            line-height: 1.7;
+            background: #f8fafc; border: 1px solid #e5e7eb; border-radius: 18px;
+            padding: 17px; margin-top: 16px; color: #374151; line-height: 1.7;
             overflow-wrap: anywhere;
         }
 
         .payment-box {
-            background: #f0fdf4;
-            border: 1px solid #bbf7d0;
-            color: #166534;
-            border-radius: 18px;
-            padding: 17px;
-            margin-top: 16px;
+            background: #f0fdf4; border: 1px solid #bbf7d0;
+            color: #166534; border-radius: 18px; padding: 17px; margin-top: 16px;
         }
 
         .btn-main {
             background: linear-gradient(135deg, #7c3aed, #ec4899);
-            color: white;
-            border: none;
-            border-radius: 999px;
-            padding: 13px;
-            font-weight: 900;
+            color: white !important; border: none; border-radius: 999px;
+            padding: 14px; font-weight: 800; text-transform: uppercase;
+            letter-spacing: 0.5px; transition: opacity 0.15s ease-in-out;
+            cursor: pointer;
         }
+        .btn-main:hover { opacity: 0.95; }
 
-        .btn-main:hover {
-            color: white;
-        }
-
-        footer {
-            background: rgba(5,8,22,.9);
-            color: #9ca3af;
-            text-align: center;
-            padding: 15px;
-            margin-top: 40px;
-        }
+        footer { background: rgba(5,8,22,.9); color: #9ca3af; text-align: center; padding: 15px; margin-top: 40px; }
     </style>
 </head>
-
 <body>
 
 <nav class="navbar navbar-dark px-4 py-3">
     <a class="navbar-brand fw-bold d-flex align-items-center" href="dashboard.php">
-        <span class="brand-box">
-            <i class="fa-solid fa-bolt"></i>
-        </span>
-        Eventix Volunteer
+        <span class="brand-box"><i class="fa-solid fa-bolt"></i></span> Eventix Volunteer
     </a>
-
     <div>
         <a href="dashboard.php" class="btn btn-outline-light btn-sm me-2">Dashboard</a>
-        <a href="available-events.php" class="btn btn-light btn-sm me-2">Available Events</a>
+        <a href="available-events.php" class="btn btn-light btn-sm me-2">Available Shifts</a>
         <a href="logout.php" class="btn btn-danger btn-sm">Logout</a>
     </div>
 </nav>
+
 <section class="wrapper">
     <div class="container">
         <div class="join-card mx-auto" style="max-width: 850px;">
 
             <span class="event-type">
-                <?php echo htmlspecialchars($event['event_type']); ?>
+                <?php echo htmlspecialchars($event['event_type'] ?? 'General Allocation'); ?>
             </span>
 
             <h2 class="fw-bold mb-3">
@@ -199,84 +168,76 @@ if (isset($_POST['join_event']) && $status == "new") {
 
             <div class="info-line">
                 <i class="fa-solid fa-calendar-days"></i>
-                <strong>Date:</strong>
+                <strong>Calendar Execution Window:</strong>
                 <?php echo date("d M Y", strtotime($event['event_date'])); ?>
             </div>
 
             <div class="info-line">
                 <i class="fa-solid fa-clock"></i>
-                <strong>Time:</strong>
+                <strong>Target Time Stamp:</strong>
                 <?php echo htmlspecialchars($event['event_time']); ?>
             </div>
 
             <div class="info-line">
                 <i class="fa-solid fa-location-dot"></i>
-                <strong>Venue:</strong>
+                <strong>Physical Coordinates (Venue):</strong>
                 <?php echo htmlspecialchars($event['venue']); ?>
             </div>
 
             <div class="info-line">
                 <i class="fa-solid fa-users"></i>
-                <strong>Required Volunteers:</strong>
-                <?php echo htmlspecialchars($event['required_volunteers']); ?>
+                <strong>Required Personnel Threshold:</strong>
+                <?php echo htmlspecialchars($event['required_volunteers']); ?> assets requested
             </div>
 
             <?php if (!empty($event['google_map_link'])) { ?>
                 <div class="mt-3">
-                    <a href="<?php echo htmlspecialchars($event['google_map_link']); ?>"
-                       target="_blank"
-                       class="btn btn-outline-primary btn-sm rounded-pill px-3">
-                        <i class="fa-solid fa-map-location-dot me-1"></i>
-                        View Location
+                    <a href="<?php echo htmlspecialchars($event['google_map_link']); ?>" target="_blank" class="btn btn-outline-primary btn-sm rounded-pill px-3">
+                        <i class="fa-solid fa-map-location-dot me-1"></i> Launch Map Routing
                     </a>
                 </div>
             <?php } ?>
 
             <div class="section-box">
-                <strong>Volunteer Duties:</strong><br>
-                <?php echo nl2br(htmlspecialchars($event['volunteer_duties'])); ?>
+                <strong>Assigned Operational Duties:</strong><br>
+                <?php echo nl2br(htmlspecialchars($event['volunteer_duties'] ?? 'Standard logistical support operations.')); ?>
             </div>
 
             <div class="section-box">
-                <strong>Special Instructions:</strong><br>
-                <?php echo nl2br(htmlspecialchars($event['instructions'])); ?>
+                <strong>Critical Dispatch Instructions:</strong><br>
+                <?php echo nl2br(htmlspecialchars($event['instructions'] ?? 'No extra constraints declared. Keep communications channels open.')); ?>
             </div>
 
             <div class="section-box">
-                <strong>Event Description:</strong><br>
-                <?php echo nl2br(htmlspecialchars($event['description'])); ?>
+                <strong>Baseline Description Matrix:</strong><br>
+                <?php echo nl2br(htmlspecialchars($event['description'] ?? 'No metadata summary provided.')); ?>
             </div>
 
             <div class="payment-box">
-                <strong>Volunteer Payment:</strong>
-                ₹<?php echo htmlspecialchars($event['volunteer_payment']); ?> per person<br>
-
-                <strong>Payment Schedule:</strong>
-                <?php echo htmlspecialchars($event['payment_timeline']); ?><br>
-
-                <strong>Payment Method:</strong>
-                <?php echo htmlspecialchars($event['payment_method']); ?>
+                <strong>Disbursement Factor:</strong> 
+                ₹<?php echo htmlspecialchars($event['volunteer_payment'] ?? '0'); ?> clear balance payout per person<br>
+                
+                <strong>Timeline Resolution:</strong> 
+                <?php echo htmlspecialchars($event['payment_timeline'] ?? 'Post-event verification review.'); ?><br>
+                
+                <strong>Distribution Channel:</strong> 
+                <?php echo htmlspecialchars($event['payment_method'] ?? 'Direct verification QR interface.'); ?>
             </div>
 
-            <?php if ($status == "new") { ?>
+            <?php if ($status === "new") { ?>
                 <form method="POST" class="mt-4">
-                    <button type="submit"
-                            name="join_event"
-                            class="btn btn-main w-100">
-                        <i class="fa-solid fa-handshake-angle me-2"></i>
-                        Confirm & Join Event
+                    <button type="submit" name="join_event" class="btn btn-main w-100">
+                        <i class="fa-solid fa-handshake-angle me-2"></i> Confirm Assignment Registration
                     </button>
                 </form>
             <?php } else { ?>
-                <div class="alert alert-info rounded-4 mt-4 mb-0">
-                    <strong>Status:</strong>
-                    You have already joined this event.
+                <div class="alert alert-info rounded-4 mt-4 mb-0 fw-medium">
+                    <i class="fa-solid fa-circle-info me-2"></i> Allocation Status: You are registered as an operational node on this roster.
                 </div>
             <?php } ?>
 
-            <a href="available-events.php"
-               class="btn btn-outline-secondary w-100 rounded-pill mt-3">
-                Back to Available Events
+            <a href="available-events.php" class="btn btn-outline-secondary w-100 rounded-pill mt-3 fw-semibold">
+                Return to Roster Matrix
             </a>
 
         </div>
@@ -284,41 +245,37 @@ if (isset($_POST['join_event']) && $status == "new") {
 </section>
 
 <footer>
-    © 2026 Eventix | Join Event
+    &copy; 2026 Eventix Infrastructure Framework &bull; Distributed Event Execution Environment.
 </footer>
 
-<?php if ($status == "joined") { ?>
+<?php if ($status === "joined") { ?>
 <script>
 Swal.fire({
-    title: 'Joined Successfully!',
-    text: 'You have joined this event. Attendance approval is pending.',
+    title: 'Node Registered!',
+    text: 'Your account vector has successfully linked with this event roster framework.',
     icon: 'success',
-    confirmButtonText: 'View My Joined Events',
+    confirmButtonText: 'View Operational Schedule',
     confirmButtonColor: '#7c3aed',
     allowOutsideClick: false
 }).then(() => {
     window.location.href = 'joined-events.php';
 });
 </script>
-<?php } ?>
-
-<?php if ($status == "already") { ?>
+<?php } elseif ($status === "already" && isset($_POST['join_event'])) { ?>
 <script>
 Swal.fire({
-    title: 'Already Joined!',
-    text: 'You have already registered for this event.',
+    title: 'Duplicate Stream Detected',
+    text: 'A record index matching this profile and event token structure already exists.',
     icon: 'info',
-    confirmButtonText: 'Back to Events',
+    confirmButtonText: 'Acknowledge Integrity',
     confirmButtonColor: '#7c3aed'
 });
 </script>
-<?php } ?>
-
-<?php if ($status == "error") { ?>
+<?php } elseif ($status === "error") { ?>
 <script>
 Swal.fire({
-    title: 'Something went wrong!',
-    text: 'Could not join the event. Please try again.',
+    title: 'Transaction Aborted',
+    text: 'Database insertion layer threw a parsing exception. Try cycling your login state.',
     icon: 'error',
     confirmButtonColor: '#dc2626'
 });

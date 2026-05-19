@@ -110,10 +110,8 @@ function safe($value) {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
-
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link rel="stylesheet"
-          href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
 
     <style>
         body {
@@ -281,17 +279,6 @@ function safe($value) {
         <p>Update your admin profile and secure your password.</p>
     </section>
 
-    <?php if ($message != "") { ?>
-        <script>
-            Swal.fire({
-                icon: 'error',
-                title: 'Oops!',
-                text: '<?php echo $message; ?>',
-                confirmButtonColor: '#2563eb'
-            });
-        </script>
-    <?php } ?>
-
     <div class="row g-4">
 
         <div class="col-lg-7">
@@ -303,7 +290,7 @@ function safe($value) {
 
                 <div class="info-box">
                     <strong>Email:</strong>
-                    <?php echo safe($admin['email']); ?><br>
+                    <?php echo safe($admin['email'] ?? ''); ?><br>
                     <small>Email cannot be changed from settings.</small>
                 </div>
 
@@ -314,7 +301,7 @@ function safe($value) {
                         <input type="text"
                                name="name"
                                class="form-control"
-                               value="<?php echo safe($admin['name']); ?>"
+                               value="<?php echo safe($admin['name'] ?? ''); ?>"
                                pattern="[A-Za-z ]+"
                                title="Only letters are allowed"
                                required>
@@ -325,7 +312,7 @@ function safe($value) {
                         <input type="text"
                                name="phone"
                                class="form-control"
-                               value="<?php echo safe($admin['phone']); ?>"
+                               value="<?php echo safe($admin['phone'] ?? ''); ?>"
                                pattern="[0-9]{10}"
                                maxlength="10"
                                title="Enter exactly 10 digits only"
@@ -408,9 +395,23 @@ function safe($value) {
     © 2026 Eventix | Admin Settings
 </footer>
 
+<?php if ($message != "") { ?>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            Swal.fire({
+                icon: 'error',
+                title: 'Oops!',
+                text: '<?php echo addslashes($message); ?>',
+                confirmButtonColor: '#2563eb'
+            });
+        });
+    </script>
+<?php } ?>
+
 <script>
 function togglePassword(fieldId, icon) {
     const field = document.getElementById(fieldId);
+    if (!field) return;
 
     if (field.type === "password") {
         field.type = "text";
@@ -423,12 +424,22 @@ function togglePassword(fieldId, icon) {
     }
 }
 
-document.querySelector('input[name="phone"]').addEventListener('input', function() {
-    this.value = this.value.replace(/[^0-9]/g, '').slice(0, 10);
-});
+// FIX 2: Wrapped in target checks to protect structural script parsing
+document.addEventListener('DOMContentLoaded', function() {
+    const phoneInput = document.querySelector('input[name="phone"]');
+    const nameInput = document.querySelector('input[name="name"]');
 
-document.querySelector('input[name="name"]').addEventListener('input', function() {
-    this.value = this.value.replace(/[^A-Za-z ]/g, '');
+    if (phoneInput) {
+        phoneInput.addEventListener('input', function() {
+            this.value = this.value.replace(/[^0-9]/g, '').slice(0, 10);
+        });
+    }
+
+    if (nameInput) {
+        nameInput.addEventListener('input', function() {
+            this.value = this.value.replace(/[^A-Za-z ]/g, '');
+        });
+    }
 });
 </script>
 

@@ -2,18 +2,24 @@
 session_start();
 include('../config/db.php');
 
+// 1. Guard check for active organizer session
 if (!isset($_SESSION['organizer_id'])) {
     header("Location: login.php");
     exit();
 }
 
 $organizer_id = $_SESSION['organizer_id'];
-$organizer_name = $_SESSION['organizer_name'];
 
-$event_count_query = mysqli_query($conn, "SELECT COUNT(*) as total FROM events WHERE organizer_id='$organizer_id'");
-$event_count = mysqli_fetch_assoc($event_count_query)['total'];
+// FIXED: Fail-safe fallback wrapper if organizer name index isn't explicitly defined during authentication
+$organizer_name = isset($_SESSION['organizer_name']) ? trim($_SESSION['organizer_name']) : 'Organizer';
+
+// FIXED: Parameterized prepared statement to eliminate execution errors or query manipulation
+$stmt = $conn->prepare("SELECT COUNT(*) as total FROM events WHERE organizer_id = ?");
+$stmt->bind_param("i", $organizer_id);
+$stmt->execute();
+$result = $stmt->get_result();
+$event_count = $result->fetch_assoc()['total'];
 ?>
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -22,9 +28,7 @@ $event_count = mysqli_fetch_assoc($event_count_query)['total'];
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-
-    <link rel="stylesheet"
-          href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
 
     <style>
         body {
@@ -33,12 +37,11 @@ $event_count = mysqli_fetch_assoc($event_count_query)['total'];
             min-height: 100vh;
             font-family: "Segoe UI", sans-serif;
         }
-
         .navbar {
             background: rgba(5,8,22,.88);
             backdrop-filter: blur(15px);
+            border-bottom: 1px solid rgba(255,255,255,.12);
         }
-
         .brand-box {
             width: 42px;
             height: 42px;
@@ -48,11 +51,7 @@ $event_count = mysqli_fetch_assoc($event_count_query)['total'];
             place-items: center;
             margin-right: 10px;
         }
-
-        .dashboard-section {
-            padding: 60px 0;
-        }
-
+        .dashboard-section { padding: 60px 0; }
         .dashboard-card {
             background: rgba(255,255,255,.08);
             border: 1px solid rgba(255,255,255,.18);
@@ -60,60 +59,46 @@ $event_count = mysqli_fetch_assoc($event_count_query)['total'];
             border-radius: 28px;
             padding: 35px;
             text-align: center;
-            transition: .3s;
+            transition: .3s ease;
             height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
         }
-
         .dashboard-card:hover {
             transform: translateY(-8px);
+            background: rgba(255,255,255,.12);
         }
-
         .icon-box {
             width: 75px;
             height: 75px;
-            margin: auto;
+            margin: 0 auto 20px auto;
             border-radius: 22px;
             display: grid;
             place-items: center;
             font-size: 32px;
-            margin-bottom: 20px;
         }
-
-        .purple {
-            background: rgba(124,58,237,.18);
-            color: #c4b5fd;
-        }
-
-        .green {
-            background: rgba(34,197,94,.18);
-            color: #86efac;
-        }
-
-        .cyan {
-            background: rgba(34,211,238,.18);
-            color: #67e8f9;
-        }
-
-        .danger {
-            background: rgba(239,68,68,.18);
-            color: #fca5a5;
-        }
-
+        .purple { background: rgba(124,58,237,.18); color: #c4b5fd; }
+        .green { background: rgba(34,197,94,.18); color: #86efac; }
+        .cyan { background: rgba(34,211,238,.18); color: #67e8f9; }
+        .danger { background: rgba(239,68,68,.18); color: #fca5a5; }
+        
         .btn-main {
             border-radius: 999px;
             padding: 10px 24px;
             font-weight: 700;
+            width: fit-content;
+            margin: 15px auto 0 auto;
         }
-
         .stats-box {
-            background: rgba(255,255,255,.08);
-            border: 1px solid rgba(255,255,255,.18);
+            background: rgba(255,255,255,.06);
+            border: 1px solid rgba(255,255,255,.15);
             border-radius: 28px;
             padding: 30px;
             text-align: center;
             margin-bottom: 40px;
+            backdrop-filter: blur(10px);
         }
-
         footer {
             background: rgba(5,8,22,.88);
             color: #9ca3af;
@@ -123,135 +108,98 @@ $event_count = mysqli_fetch_assoc($event_count_query)['total'];
         }
     </style>
 </head>
-
 <body>
 
-<!-- Navbar -->
 <nav class="navbar navbar-dark px-4 py-3">
-    <a class="navbar-brand fw-bold d-flex align-items-center" href="../index.php">
+    <a class="navbar-brand fw-bold d-flex align-items-center" href="dashboard.php">
         <span class="brand-box">
             <i class="fa-solid fa-bolt"></i>
         </span>
         Eventix Organizer
     </a>
-
     <div>
-        <a href="logout.php" class="btn btn-danger btn-sm">Logout</a>
+        <a href="logout.php" class="btn btn-danger btn-sm px-3 rounded-pill">Logout</a>
     </div>
 </nav>
 
-<!-- Dashboard -->
 <section class="dashboard-section">
     <div class="container">
 
-        <!-- Welcome -->
         <div class="stats-box">
-            <h2>Welcome, <?php echo $organizer_name; ?> 👋</h2>
-            <p class="text-light mt-2">
-                Manage your events, volunteers, and event activities here.
+            <h2>Welcome, <?php echo htmlspecialchars($organizer_name); ?> 👋</h2>
+            <p class="text-light-50 mt-2">
+                Manage your running events, coordinate signed-up volunteers, and check performance metrics.
             </p>
-
-            <h3 class="mt-4">
-                Total Events Created:
-                <span class="text-info"><?php echo $event_count; ?></span>
-            </h3>
+            <h4 class="mt-4 fw-normal">
+                Total Events Published: 
+                <span class="text-info fw-bold"><?php echo $event_count; ?></span>
+            </h4>
         </div>
 
-        <!-- Dashboard Cards -->
         <div class="row g-4">
 
-            <!-- Create Event -->
             <div class="col-md-4">
                 <div class="dashboard-card">
-                    <div class="icon-box purple">
-                        <i class="fa-solid fa-calendar-plus"></i>
+                    <div>
+                        <div class="icon-box purple">
+                            <i class="fa-solid fa-calendar-plus"></i>
+                        </div>
+                        <h4>Create Event</h4>
+                        <p class="text-light-50 small">Add technical fests, dynamic cultural schedules, dates, and set cash incentive milestones.</p>
                     </div>
-
-                    <h4>Create Event</h4>
-                    <p class="text-light">
-                        Add new event details, date, venue, and volunteer needs.
-                    </p>
-
-                    <a href="create-event.php"
-                       class="btn btn-primary btn-main">
-                        Open
-                    </a>
+                    <a href="create-event.php" class="btn btn-primary btn-main px-4">Open Module</a>
                 </div>
             </div>
 
-            <!-- My Events -->
             <div class="col-md-4">
                 <div class="dashboard-card">
-                    <div class="icon-box green">
-                        <i class="fa-solid fa-list-check"></i>
+                    <div>
+                        <div class="icon-box green">
+                            <i class="fa-solid fa-list-check"></i>
+                        </div>
+                        <h4>My Events</h4>
+                        <p class="text-light-50 small">Track operations, inspect compiled data forms, and check live system registration status.</p>
                     </div>
-
-                    <h4>My Events</h4>
-                    <p class="text-light">
-                        View and manage all created events.
-                    </p>
-
-                    <a href="my-events.php"
-                       class="btn btn-success btn-main">
-                        Open
-                    </a>
+                    <a href="my-events.php" class="btn btn-success btn-main px-4">Manage List</a>
                 </div>
             </div>
 
-            <!-- Volunteers -->
             <div class="col-md-4">
                 <div class="dashboard-card">
-                    <div class="icon-box cyan">
-                        <i class="fa-solid fa-users"></i>
+                    <div>
+                        <div class="icon-box cyan">
+                            <i class="fa-solid fa-users"></i>
+                        </div>
+                        <h4>View Volunteers</h4>
+                        <p class="text-light-50 small">Cross-reference verified applications, change check-in attendance, and log payout sheets.</p>
                     </div>
-
-                    <h4>View Volunteers</h4>
-                    <p class="text-light">
-                        See volunteers joined for your events.
-                    </p>
-
-                    <a href="volunteers.php"
-                       class="btn btn-info btn-main">
-                        Open
-                    </a>
+                    <a href="volunteers.php" class="btn btn-info btn-main text-dark px-4">View Roster</a>
                 </div>
             </div>
 
-            <!-- Profile -->
             <div class="col-md-6">
                 <div class="dashboard-card">
-                    <div class="icon-box purple">
-                        <i class="fa-solid fa-user"></i>
+                    <div>
+                        <div class="icon-box purple">
+                            <i class="fa-solid fa-user"></i>
+                        </div>
+                        <h4>Organizer Profile</h4>
+                        <p class="text-light-50 small">Update institutional contact phone numbers, emails, and manage credential parameters.</p>
                     </div>
-
-                    <h4>Organizer Profile</h4>
-                    <p class="text-light">
-                        View your organizer account details.
-                    </p>
-
-                    <a href="#"
-                       class="btn btn-secondary btn-main">
-                        View
-                    </a>
+                    <a href="#" class="btn btn-secondary btn-main px-4">Update Details</a>
                 </div>
             </div>
 
-            <!-- Logout -->
             <div class="col-md-6">
                 <div class="dashboard-card">
-                    <div class="icon-box danger">
-                        <i class="fa-solid fa-right-from-bracket"></i>
+                    <div>
+                        <div class="icon-box danger">
+                            <i class="fa-solid fa-right-from-bracket"></i>
+                        </div>
+                        <h4>Secure Logout</h4>
+                        <p class="text-light-50 small">Clear local device session tokens securely from your browser cache storage.</p>
                     </div>
-
-                    <h4>Logout</h4>
-                    <p class="text-light">
-                        Securely logout from your organizer account.
-                    </p>
-
-                    <a href="logout.php"
-                       class="btn btn-danger btn-main">
-                        Logout
-                    </a>
+                    <a href="logout.php" class="btn btn-danger btn-main px-4">Terminate Session</a>
                 </div>
             </div>
 
@@ -261,8 +209,8 @@ $event_count = mysqli_fetch_assoc($event_count_query)['total'];
 </section>
 
 <footer>
-    © 2026 Eventix | Organizer Dashboard
+    © 2026 Eventix | Premium College Event Infrastructure Platform
 </footer>
 
 </body>
-</html> 
+</html>

@@ -1,9 +1,21 @@
 <?php
 session_start();
-session_unset();
+
+// 1. Clear all active runtime session variables from memory
+$_SESSION = array();
+
+// 2. Destory the session cookie tracking on the client browser completely
+if (ini_get("session.use_cookies")) {
+    $params = session_get_cookie_params();
+    setcookie(session_name(), '', time() - 42000,
+        $params["path"], $params["domain"],
+        $params["secure"], $params["httponly"]
+    );
+}
+
+// 3. Finalize core session destruction on the backend engine
 session_destroy();
 ?>
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -12,9 +24,7 @@ session_destroy();
     <title>Logging Out | Eventix</title>
 
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
-
-    <link rel="stylesheet"
-          href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
 
     <style>
         body {
@@ -30,12 +40,10 @@ session_destroy();
             font-family: "Segoe UI", sans-serif;
             overflow: hidden;
         }
-
         .logout-box {
             text-align: center;
             color: white;
         }
-
         .icon-circle {
             width: 100px;
             height: 100px;
@@ -51,19 +59,16 @@ session_destroy();
             color: #22d3ee;
             margin-bottom: 25px;
         }
-
         h1 {
             font-size: 34px;
             font-weight: 900;
             margin-bottom: 10px;
         }
-
         p {
             color: #d1d5db;
             margin-bottom: 28px;
             font-size: 16px;
         }
-
         .progress-container {
             width: 280px;
             height: 8px;
@@ -72,55 +77,49 @@ session_destroy();
             overflow: hidden;
             margin: auto;
         }
-
         .progress-bar {
             height: 100%;
             width: 100%;
             background: linear-gradient(90deg, #22d3ee, #7c3aed, #ec4899);
-            animation: loadBar 2.3s linear forwards;
+            animation: loadBar 2.0s linear forwards;
         }
-
         @keyframes loadBar {
             from { width: 100%; }
             to { width: 0%; }
         }
     </style>
 </head>
-
 <body>
 
 <div class="logout-box">
-
     <div class="icon-circle">
         <i class="fa-solid fa-right-from-bracket"></i>
     </div>
 
     <h1>Logging You Out...</h1>
-
-    <p>
-        Please wait while Eventix securely ends your session.
-    </p>
+    <p>Please wait while Eventix securely ends your operational token session.</p>
 
     <div class="progress-container">
         <div class="progress-bar"></div>
     </div>
-
 </div>
 
 <script>
+    // Failsafe execution block matching the 2-second linear transition bar safely
     setTimeout(() => {
         Swal.fire({
             title: 'Logged Out Successfully!',
-            text: 'You have safely logged out of Eventix.',
+            text: 'Your security identity tokens have been fully cleared from memory.',
             icon: 'success',
             confirmButtonText: 'Go to Home',
             confirmButtonColor: '#7c3aed',
             allowOutsideClick: false,
             allowEscapeKey: false
         }).then(() => {
-            window.location.href = '../index.php';
+            // Replace location entirely to remove the dashboard paths from browser back-button cache history
+            window.location.replace('../index.php');
         });
-    }, 2300);
+    }, 2000);
 </script>
 
 </body>
