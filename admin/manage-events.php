@@ -7,24 +7,9 @@ if (!isset($_SESSION['admin_id'])) {
     exit();
 }
 
-// Fail-safe check to prevent query crashes if custom columns are missing
-$check_timeline_col = $conn->query("SHOW COLUMNS FROM events LIKE 'payment_timeline'");
-$timeline_select = ($check_timeline_col && $check_timeline_col->num_rows > 0) ? "e.payment_timeline," : "'Not added' AS payment_timeline,";
-
-$check_payment_col = $conn->query("SHOW COLUMNS FROM events LIKE 'volunteer_payment'");
-$payment_select = ($check_payment_col && $check_payment_col->num_rows > 0) ? "e.volunteer_payment," : "'0' AS volunteer_payment,";
-
-// Fetching all events with total volunteer count
 $events = $conn->query("
     SELECT 
-        e.id,
-        e.event_name,
-        e.event_type,
-        e.event_date,
-        e.event_time,
-        e.venue,
-        $timeline_select
-        $payment_select
+        e.*,
         u.name AS organizer_name,
         u.email AS organizer_email,
         COUNT(ve.id) AS total_volunteers
@@ -48,8 +33,10 @@ function safe($value) {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+    <link rel="stylesheet"
+          href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
 
     <style>
         body {
@@ -105,6 +92,22 @@ function safe($value) {
 
         .table {
             vertical-align: middle;
+        }
+
+        .badge-paid {
+            background: #dcfce7;
+            color: #166534;
+            padding: 7px 13px;
+            border-radius: 999px;
+            font-weight: 800;
+        }
+
+        .badge-pending {
+            background: #fef3c7;
+            color: #92400e;
+            padding: 7px 13px;
+            border-radius: 999px;
+            font-weight: 800;
         }
 
         .btn-pill {
@@ -178,6 +181,7 @@ function safe($value) {
                     <tbody>
                         <?php $i = 1; while ($row = $events->fetch_assoc()) { ?>
                             <tr>
+
                                 <td><?php echo $i++; ?></td>
 
                                 <td>
@@ -195,11 +199,7 @@ function safe($value) {
                                 </td>
 
                                 <td>
-                                    <?php 
-                                    echo (!empty($row['event_date']) && $row['event_date'] != '0000-00-00') 
-                                        ? date("d M Y", strtotime($row['event_date'])) 
-                                        : "No date set"; 
-                                    ?><br>
+                                    <?php echo date("d M Y", strtotime($row['event_date'])); ?><br>
                                     <small class="text-muted">
                                         <?php echo safe($row['event_time']); ?>
                                     </small>
@@ -235,6 +235,7 @@ function safe($value) {
                                         Delete
                                     </a>
                                 </td>
+
                             </tr>
                         <?php } ?>
                     </tbody>
@@ -265,7 +266,7 @@ function confirmDelete(event, url) {
 
     Swal.fire({
         title: 'Delete Event?',
-        text: 'This event and its associated registrations will be permanently removed.',
+        text: 'This event will be permanently removed from the system.',
         icon: 'warning',
         showCancelButton: true,
         confirmButtonText: 'Yes, Delete',

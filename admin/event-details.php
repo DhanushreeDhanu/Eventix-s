@@ -14,7 +14,6 @@ if (!isset($_GET['id']) || empty($_GET['id'])) {
 
 $event_id = intval($_GET['id']);
 
-// 1. Fetch event information and basic organizer details
 $event_stmt = $conn->prepare("
     SELECT 
         e.*,
@@ -34,43 +33,22 @@ if (!$event) {
     header("Location: manage-events.php");
     exit();
 }
-$event_stmt->close();
 
-// 2. FIX: Check if schema column modifications are present to avoid variable crashes
-$check_college = $conn->query("SHOW COLUMNS FROM users LIKE 'college'");
-$has_college = ($check_college && $check_college->num_rows > 0);
-
-$check_skills = $conn->query("SHOW COLUMNS FROM users LIKE 'skills'");
-$has_skills = ($check_skills && $check_skills->num_rows > 0);
-
-$check_qr = $conn->query("SHOW COLUMNS FROM volunteer_events LIKE 'payment_qr'");
-$has_qr = ($check_qr && $check_qr->num_rows > 0);
-
-$check_pay_status = $conn->query("SHOW COLUMNS FROM volunteer_events LIKE 'payment_status'");
-$has_pay_status = ($check_pay_status && $check_pay_status->num_rows > 0);
-
-// Building safe select statements based on column availability
-$college_sel = $has_college ? "v.college" : "'' AS college";
-$skills_sel = $has_skills ? "v.skills" : "'' AS skills";
-$qr_sel = $has_qr ? "ve.payment_qr" : "'' AS payment_qr";
-$pay_status_sel = $has_pay_status ? "ve.payment_status" : "'pending' AS payment_status";
-
-// 3. FIX: Join against the unified 'users' table instead of a ghost 'volunteers' table
 $vol_stmt = $conn->prepare("
     SELECT 
         ve.id AS join_id,
         ve.joined_at,
         ve.attendance_status,
-        $pay_status_sel,
-        v.name AS full_name,
+        ve.payment_status,
+        v.full_name,
         v.email,
         v.phone,
-        $college_sel,
-        $skills_sel,
-        $qr_sel
+        v.college,
+        v.skills,
+        v.payment_qr
     FROM volunteer_events ve
-    JOIN users v ON ve.volunteer_id = v.id
-    WHERE ve.event_id=? AND v.role='volunteer'
+    JOIN volunteers v ON ve.volunteer_id = v.id
+    WHERE ve.event_id=?
     ORDER BY ve.joined_at DESC
 ");
 $vol_stmt->bind_param("i", $event_id);
@@ -90,7 +68,8 @@ function safe($value) {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+    <link rel="stylesheet"
+          href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
 
     <style>
         body {
@@ -200,17 +179,19 @@ function safe($value) {
             margin: 2px;
         }
 
-        .pending, .waiting {
+        .pending {
             background: #fef3c7;
             color: #92400e;
         }
 
-        .approved, .paid, .present, .active {
+        .approved,
+        .paid {
             background: #dcfce7;
             color: #166534;
         }
 
-        .rejected, .unpaid, .absent, .blocked {
+        .rejected,
+        .unpaid {
             background: #fee2e2;
             color: #991b1b;
         }
@@ -304,13 +285,7 @@ function safe($value) {
 
                     <div class="col-md-6 info-line">
                         <div class="label">Event Date</div>
-                        <div class="value">
-                            <?php 
-                            echo (!empty($event['event_date']) && $event['event_date'] != '0000-00-00') 
-                                ? date("d M Y", strtotime($event['event_date'])) 
-                                : "No date set"; 
-                            ?>
-                        </div>
+                        <div class="value"><?php echo date("d M Y", strtotime($event['event_date'])); ?></div>
                     </div>
 
                     <div class="col-md-6 info-line">
@@ -330,35 +305,33 @@ function safe($value) {
 
                     <div class="col-md-6 info-line">
                         <div class="label">Volunteer Payment</div>
-                        <div class="value">
-                            <?php echo isset($event['volunteer_payment']) ? '₹' . safe($event['volunteer_payment']) : 'Not added'; ?>
-                        </div>
+                        <div class="value">₹<?php echo safe($event['volunteer_payment']); ?></div>
                     </div>
 
                     <div class="col-md-6 info-line">
                         <div class="label">Payment Timeline</div>
-                        <div class="value"><?php echo isset($event['payment_timeline']) ? safe($event['payment_timeline']) : 'Not added'; ?></div>
+                        <div class="value"><?php echo safe($event['payment_timeline']); ?></div>
                     </div>
 
                     <div class="col-md-6 info-line">
                         <div class="label">Payment Method</div>
-                        <div class="value"><?php echo isset($event['payment_method']) ? safe($event['payment_method']) : 'Not added'; ?></div>
+                        <div class="value"><?php echo safe($event['payment_method']); ?></div>
                     </div>
                 </div>
 
                 <div class="mt-4">
                     <div class="label">Volunteer Duties</div>
-                    <p class="value"><?php echo isset($event['volunteer_duties']) ? nl2br(safe($event['volunteer_duties'])) : 'Not added'; ?></p>
+                    <p class="value"><?php echo nl2br(safe($event['volunteer_duties'])); ?></p>
                 </div>
 
                 <div class="mt-4">
                     <div class="label">Special Instructions</div>
-                    <p class="value"><?php echo isset($event['instructions']) ? nl2br(safe($event['instructions'])) : 'Not added'; ?></p>
+                    <p class="value"><?php echo nl2br(safe($event['instructions'])); ?></p>
                 </div>
 
                 <div class="mt-4">
                     <div class="label">Description</div>
-                    <p class="value"><?php echo isset($event['description']) ? nl2br(safe($event['description'])) : 'Not added'; ?></p>
+                    <p class="value"><?php echo nl2br(safe($event['description'])); ?></p>
                 </div>
 
                 <?php if (!empty($event['google_map_link'])) { ?>
@@ -407,12 +380,12 @@ function safe($value) {
 
                 <div class="info-line">
                     <div class="label">Event Contact Person</div>
-                    <div class="value"><?php echo isset($event['contact_person']) ? safe($event['contact_person']) : 'Not added'; ?></div>
+                    <div class="value"><?php echo safe($event['contact_person']); ?></div>
                 </div>
 
                 <div class="info-line">
                     <div class="label">Event Contact Phone</div>
-                    <div class="value"><?php echo isset($event['contact_phone']) ? safe($event['contact_phone']) : 'Not added'; ?></div>
+                    <div class="value"><?php echo safe($event['contact_phone']); ?></div>
                 </div>
             </div>
         </div>
@@ -425,7 +398,7 @@ function safe($value) {
             Registered Volunteers
         </h4>
 
-        <?php if ($volunteers && $volunteers->num_rows > 0) { ?>
+        <?php if ($volunteers->num_rows > 0) { ?>
 
             <?php while ($vol = $volunteers->fetch_assoc()) { ?>
 
@@ -446,10 +419,10 @@ function safe($value) {
 
                         <div class="col-md-3">
                             <strong>College:</strong><br>
-                            <small><?php echo $has_college ? safe($vol['college']) : "Not collected"; ?></small><br>
+                            <small><?php echo safe($vol['college']); ?></small><br>
 
                             <strong>Skills:</strong><br>
-                            <small><?php echo $has_skills ? nl2br(safe($vol['skills'])) : "Not collected"; ?></small>
+                            <small><?php echo nl2br(safe($vol['skills'])); ?></small>
                         </div>
 
                         <div class="col-md-2">
@@ -468,7 +441,7 @@ function safe($value) {
                         </div>
 
                         <div class="col-md-2 text-center">
-                            <?php if ($has_qr && !empty($vol['payment_qr'])) { ?>
+                            <?php if (!empty($vol['payment_qr'])) { ?>
                                 <img src="../uploads/volunteer_qr/<?php echo safe($vol['payment_qr']); ?>"
                                      class="qr-img"
                                      alt="Payment QR">

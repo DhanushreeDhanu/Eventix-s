@@ -1,6 +1,6 @@
 <?php
 session_start();
-include('../config/db.php'); 
+include('../config/db.php');
 
 if (!isset($_SESSION['admin_id'])) {
     header("Location: login.php");
@@ -10,37 +10,18 @@ if (!isset($_SESSION['admin_id'])) {
 function getCount($conn, $sql) {
     $result = $conn->query($sql);
     if ($result) {
-        $row = $result->fetch_assoc();
-        return $row['total'];
+        return $result->fetch_assoc()['total'];
     }
     return 0;
 }
 
-// FIX: Pulling volunteers safely from the users table using the role column
-$total_organizers   = getCount($conn, "SELECT COUNT(*) AS total FROM users WHERE role='organizer'");
-$total_volunteers   = getCount($conn, "SELECT COUNT(*) AS total FROM users WHERE role='volunteer'"); 
-$total_events       = getCount($conn, "SELECT COUNT(*) AS total FROM events");
-$total_joined       = getCount($conn, "SELECT COUNT(*) AS total FROM volunteer_events");
+$total_organizers = getCount($conn, "SELECT COUNT(*) AS total FROM users WHERE role='organizer'");
+$total_volunteers = getCount($conn, "SELECT COUNT(*) AS total FROM volunteers");
+$total_events = getCount($conn, "SELECT COUNT(*) AS total FROM events");
+$total_joined = getCount($conn, "SELECT COUNT(*) AS total FROM volunteer_events");
+$blocked_organizers = getCount($conn, "SELECT COUNT(*) AS total FROM users WHERE role='organizer' AND organizer_status='blocked'");
+$pending_payments = getCount($conn, "SELECT COUNT(*) AS total FROM volunteer_events WHERE payment_status='pending'");
 
-// Fail-safe check for organizer_status column
-$blocked_organizers = 0;
-$check_status_col = $conn->query("SHOW COLUMNS FROM users LIKE 'organizer_status'");
-if ($check_status_col && $check_status_col->num_rows > 0) {
-    $blocked_organizers = getCount($conn, "SELECT COUNT(*) AS total FROM users WHERE role='organizer' AND organizer_status='blocked'");
-}
-
-// Fail-safe check for payment_status column
-$pending_payments = 0;
-$check_payment_col = $conn->query("SHOW COLUMNS FROM volunteer_events LIKE 'payment_status'");
-if ($check_payment_col && $check_payment_col->num_rows > 0) {
-    $pending_payments = getCount($conn, "SELECT COUNT(*) AS total FROM volunteer_events WHERE payment_status='pending'");
-}
-
-// Fail-safe check for payment_timeline column
-$check_timeline_col = $conn->query("SHOW COLUMNS FROM events LIKE 'payment_timeline'");
-$timeline_select = ($check_timeline_col && $check_timeline_col->num_rows > 0) ? "e.payment_timeline," : "'Not added' AS payment_timeline,";
-
-// Fetching recent events safely
 $recent_events = $conn->query("
     SELECT 
         e.id,
@@ -49,7 +30,7 @@ $recent_events = $conn->query("
         e.event_date,
         e.event_time,
         e.venue,
-        $timeline_select
+        e.payment_timeline,
         u.name AS organizer_name,
         COUNT(ve.id) AS joined_count
     FROM events e
@@ -73,7 +54,8 @@ function safe($value) {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+    <link rel="stylesheet"
+          href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
 
     <style>
         body {
@@ -279,7 +261,7 @@ function safe($value) {
     <section class="hero">
         <h1>Admin Dashboard</h1>
         <p>
-            Monitor organizers, volunteers, events, registrations, and platform metrics across Eventix.
+            Monitor organizers, volunteers, events, registrations, and payment responsibility across Eventix.
         </p>
     </section>
 
@@ -443,11 +425,7 @@ function safe($value) {
                                         <td><?php echo safe($event['organizer_name']); ?></td>
 
                                         <td>
-                                            <?php 
-                                            echo ($event['event_date'] != '0000-00-00' && !empty($event['event_date'])) 
-                                                ? date("d M Y", strtotime($event['event_date'])) 
-                                                : "No date set"; 
-                                            ?><br>
+                                            <?php echo date("d M Y", strtotime($event['event_date'])); ?><br>
                                             <small class="text-muted">
                                                 <?php echo safe($event['event_time']); ?>
                                             </small>

@@ -7,46 +7,14 @@ if (!isset($_SESSION['admin_id'])) {
     exit();
 }
 
-// 1. Dynamic fail-safe schema checks to adapt to your user column settings
-$check_college = $conn->query("SHOW COLUMNS FROM users LIKE 'college'");
-$has_college = ($check_college && $check_college->num_rows > 0);
-
-$check_skills = $conn->query("SHOW COLUMNS FROM users LIKE 'skills'");
-$has_skills = ($check_skills && $check_skills->num_rows > 0);
-
-// Detect if payment QR is tracked at profile level or relationship link level
-$check_user_qr = $conn->query("SHOW COLUMNS FROM users LIKE 'payment_qr'");
-$check_event_qr = $conn->query("SHOW COLUMNS FROM volunteer_events LIKE 'payment_qr'");
-
-$college_sel = $has_college ? "v.college" : "'' AS college";
-$skills_sel = $has_skills ? "v.skills" : "'' AS skills";
-
-if ($check_user_qr && $check_user_qr->num_rows > 0) {
-    $qr_sel = "v.payment_qr";
-} elseif ($check_event_qr && $check_event_qr->num_rows > 0) {
-    // Fallback to grabbing the latest uploaded QR from tracking history 
-    $qr_sel = "(SELECT ve2.payment_qr FROM volunteer_events ve2 WHERE ve2.volunteer_id = v.id AND ve2.payment_qr IS NOT NULL AND ve2.payment_qr != '' LIMIT 1) AS payment_qr";
-} else {
-    $qr_sel = "'' AS payment_qr";
-}
-
-// 2. FIXED: Core aggregation query using unified users table
 $volunteers = $conn->query("
     SELECT 
-        v.id,
-        v.name AS full_name,
-        v.email,
-        v.phone,
-        v.created_at,
-        $college_sel,
-        $skills_sel,
-        $qr_sel,
+        v.*,
         COUNT(ve.id) AS joined_events,
-        SUM(CASE WHEN ve.attendance_status='approved' OR ve.attendance_status='present' THEN 1 ELSE 0 END) AS approved_events,
+        SUM(CASE WHEN ve.attendance_status='approved' THEN 1 ELSE 0 END) AS approved_events,
         SUM(CASE WHEN ve.payment_status='paid' THEN 1 ELSE 0 END) AS paid_events
-    FROM users v
+    FROM volunteers v
     LEFT JOIN volunteer_events ve ON v.id = ve.volunteer_id
-    WHERE v.role = 'volunteer'
     GROUP BY v.id
     ORDER BY v.id DESC
 ");
@@ -64,8 +32,10 @@ function safe($value) {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+    <link rel="stylesheet"
+          href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
 
     <style>
         body {
@@ -168,6 +138,12 @@ function safe($value) {
             padding: 4px;
         }
 
+        .btn-pill {
+            border-radius: 999px;
+            font-weight: 700;
+            padding: 7px 14px;
+        }
+
         .empty-box {
             text-align: center;
             padding: 70px 20px;
@@ -238,7 +214,7 @@ function safe($value) {
                                 <td>
                                     <div class="d-flex align-items-center gap-3">
                                         <div class="avatar">
-                                            <?php echo !empty($row['full_name']) ? strtoupper(substr($row['full_name'], 0, 1)) : 'V'; ?>
+                                            <?php echo strtoupper(substr($row['full_name'], 0, 1)); ?>
                                         </div>
 
                                         <div>
@@ -257,10 +233,10 @@ function safe($value) {
                                     </small>
                                 </td>
 
-                                <td><?php echo $has_college ? safe($row['college']) : "Not collected"; ?></td>
+                                <td><?php echo safe($row['college']); ?></td>
 
                                 <td style="max-width:220px;">
-                                    <?php echo $has_skills ? nl2br(safe($row['skills'])) : "Not collected"; ?>
+                                    <?php echo nl2br(safe($row['skills'])); ?>
                                 </td>
 
                                 <td>
@@ -292,11 +268,7 @@ function safe($value) {
                                 </td>
 
                                 <td>
-                                    <?php 
-                                    echo (!empty($row['created_at']) && $row['created_at'] != '0000-00-00 00:00:00') 
-                                        ? date("d M Y", strtotime($row['created_at'])) 
-                                        : "Not added"; 
-                                    ?>
+                                    <?php echo !empty($row['created_at']) ? date("d M Y", strtotime($row['created_at'])) : "Not added"; ?>
                                 </td>
                             </tr>
                         <?php } ?>

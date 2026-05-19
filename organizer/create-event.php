@@ -22,6 +22,7 @@ if (isset($_POST['create_event'])) {
     $google_map_link = trim($_POST['google_map_link']);
 
     $required_volunteers = intval($_POST['required_volunteers']);
+
     $volunteer_payment = intval($_POST['volunteer_payment']);
     $payment_timeline = trim($_POST['payment_timeline']);
     $payment_method = trim($_POST['payment_method']);
@@ -31,7 +32,7 @@ if (isset($_POST['create_event'])) {
 
     $volunteer_duties = trim($_POST['volunteer_duties']);
     $instructions = trim($_POST['instructions']);
-    $raw_description = trim($_POST['description']);
+    $description = trim($_POST['description']);
 
     if ($end_time <= $start_time) {
         $message = "End time must be after start time.";
@@ -47,33 +48,34 @@ if (isset($_POST['create_event'])) {
 
         $event_time = $start_time . " - " . $end_time;
 
-        // FIXED: Concatenate extra form criteria context dynamically into description to prevent SQL definition crashes
-        $compiled_description = "Description:\n" . $raw_description . "\n\n" .
-                                 "Volunteer Duties:\n" . $volunteer_duties . "\n\n" .
-                                 "Special Instructions:\n" . $instructions . "\n\n" .
-                                 "Contact Reference:\n" . $contact_person . " (" . $contact_phone . ")\n\n" .
-                                 "Payment Method:\n" . $payment_method . " | Map Link: " . ($google_map_link ?: 'None Provided');
-
-        // Safely aligns directly with your database schema execution map
-        $stmt = $conn->prepare("INSERT INTO events 
-        (organizer_id, event_name, event_type, event_date, event_time, venue, description, required_volunteers, volunteer_payment, payment_timeline, status) 
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'upcoming')");
+        $stmt = $conn->prepare("INSERT INTO events
+        (organizer_id, event_name, event_type, event_date, event_time, venue, google_map_link,
+         contact_person, contact_phone, required_volunteers, volunteer_payment,
+         payment_timeline, payment_method, volunteer_duties, instructions, description, status)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'upcoming')");
 
         $stmt->bind_param(
-            "issssssiis",
+            "issssssssissssss",
             $organizer_id,
             $event_name,
             $event_type,
             $event_date,
             $event_time,
             $venue,
-            $compiled_description,
+            $google_map_link,
+            $contact_person,
+            $contact_phone,
             $required_volunteers,
             $volunteer_payment,
-            $payment_timeline
+            $payment_timeline,
+            $payment_method,
+            $volunteer_duties,
+            $instructions,
+            $description
         );
 
         if ($stmt->execute()) {
+
             echo "
             <!DOCTYPE html>
             <html lang='en'>
@@ -85,24 +87,23 @@ if (isset($_POST['create_event'])) {
             </head>
             <body>
                 <script>
-                    document.addEventListener('DOMContentLoaded', function() {
-                        Swal.fire({
-                            title: 'Event Published Successfully!',
-                            text: 'Your event is now live for volunteers.',
-                            icon: 'success',
-                            confirmButtonText: 'Go to My Events',
-                            confirmButtonColor: '#7c3aed',
-                            allowOutsideClick: false
-                        }).then(() => {
-                            window.location.href = 'my-events.php';
-                        });
+                    Swal.fire({
+                        title: 'Event Published Successfully!',
+                        text: 'Your event is now live for volunteers.',
+                        icon: 'success',
+                        confirmButtonText: 'Go to My Events',
+                        confirmButtonColor: '#7c3aed',
+                        allowOutsideClick: false
+                    }).then(() => {
+                        window.location.href = 'my-events.php';
                     });
                 </script>
             </body>
             </html>";
             exit();
+
         } else {
-            $message = "Failed to create event. Database execution failure: " . htmlspecialchars($stmt->error);
+            $message = "Failed to create event.";
         }
     }
 }
@@ -114,26 +115,37 @@ if (isset($_POST['create_event'])) {
     <title>Create Event | Eventix</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
+    <!-- Bootstrap -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+
+    <!-- Font Awesome -->
+    <link rel="stylesheet"
+          href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+
+    <!-- SweetAlert -->
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 
     <style>
-        * { box-sizing: border-box; }
+        * {
+            box-sizing: border-box;
+        }
+
         body {
             min-height: 100vh;
-            background: 
+            background:
                 radial-gradient(circle at top left, rgba(124,58,237,.35), transparent 35%),
                 radial-gradient(circle at bottom right, rgba(34,211,238,.22), transparent 30%),
                 linear-gradient(135deg, #050816, #15162c, #4f46e5);
             font-family: "Segoe UI", sans-serif;
             color: white;
         }
+
         .navbar {
             background: rgba(5,8,22,.88);
             backdrop-filter: blur(16px);
             border-bottom: 1px solid rgba(255,255,255,.12);
         }
+
         .brand-box {
             width: 42px;
             height: 42px;
@@ -143,7 +155,11 @@ if (isset($_POST['create_event'])) {
             place-items: center;
             margin-right: 10px;
         }
-        .wrapper { padding: 52px 0; }
+
+        .wrapper {
+            padding: 52px 0;
+        }
+
         .main-card {
             background: rgba(255,255,255,.08);
             border: 1px solid rgba(255,255,255,.18);
@@ -152,23 +168,27 @@ if (isset($_POST['create_event'])) {
             overflow: hidden;
             box-shadow: 0 30px 90px rgba(0,0,0,.35);
         }
+
         .left-panel {
             padding: 55px 45px;
-            background: 
+            background:
                 radial-gradient(circle at top left, rgba(124,58,237,.5), transparent 36%),
                 radial-gradient(circle at bottom right, rgba(34,211,238,.28), transparent 32%);
         }
+
         .left-panel h1 {
             font-size: 42px;
             font-weight: 900;
             line-height: 1.05;
         }
+
         .left-panel p {
             color: #d1d5db;
             margin-top: 20px;
             line-height: 1.7;
             font-size: 16px;
         }
+
         .feature {
             display: flex;
             gap: 14px;
@@ -176,13 +196,23 @@ if (isset($_POST['create_event'])) {
             color: #d1d5db;
             line-height: 1.5;
         }
-        .feature i { color: #22d3ee; margin-top: 4px; }
+
+        .feature i {
+            color: #22d3ee;
+            margin-top: 4px;
+        }
+
         .form-panel {
             background: rgba(255,255,255,.98);
             color: #111827;
             padding: 50px;
         }
-        .form-title { font-weight: 900; color: #111827; }
+
+        .form-title {
+            font-weight: 900;
+            color: #111827;
+        }
+
         .section-heading {
             font-weight: 900;
             margin-top: 34px;
@@ -191,19 +221,36 @@ if (isset($_POST['create_event'])) {
             border-left: 5px solid #7c3aed;
             padding-left: 14px;
         }
-        label { font-weight: 700; margin-bottom: 8px; color: #1f2937; display: block; }
-        .form-control, .form-select {
+
+        label {
+            font-weight: 700;
+            margin-bottom: 8px;
+            color: #1f2937;
+            display: block;
+        }
+
+        .form-control,
+        .form-select {
             padding: 14px 16px;
             border-radius: 15px;
             border: 1px solid #d1d5db;
             font-size: 15px;
         }
-        .form-control:focus, .form-select:focus {
+
+        .form-control:focus,
+        .form-select:focus {
             border-color: #7c3aed;
             box-shadow: 0 0 0 .2rem rgba(124,58,237,.15);
         }
-        textarea.form-control { min-height: 130px; resize: vertical; line-height: 1.7; }
-        .duration-card, .payment-note {
+
+        textarea.form-control {
+            min-height: 130px;
+            resize: vertical;
+            line-height: 1.7;
+        }
+
+        .duration-card,
+        .payment-note {
             background: #f8fafc;
             border: 1px solid #e5e7eb;
             border-radius: 20px;
@@ -211,6 +258,7 @@ if (isset($_POST['create_event'])) {
             color: #374151;
             line-height: 1.7;
         }
+
         .btn-main {
             background: linear-gradient(135deg, #7c3aed, #ec4899);
             border: none;
@@ -220,12 +268,31 @@ if (isset($_POST['create_event'])) {
             font-weight: 900;
             transition: .3s;
         }
-        .btn-main:hover { color: white; transform: translateY(-2px); }
-        footer { background: rgba(5,8,22,.9); color: #9ca3af; text-align: center; padding: 15px; }
+
+        .btn-main:hover {
+            color: white;
+            transform: translateY(-2px);
+        }
+
+        footer {
+            background: rgba(5,8,22,.9);
+            color: #9ca3af;
+            text-align: center;
+            padding: 15px;
+        }
+
         @media(max-width: 768px) {
-            .form-panel { padding: 30px; }
-            .left-panel { padding: 35px; }
-            .left-panel h1 { font-size: 34px; }
+            .form-panel {
+                padding: 30px;
+            }
+
+            .left-panel {
+                padding: 35px;
+            }
+
+            .left-panel h1 {
+                font-size: 34px;
+            }
         }
     </style>
 </head>
@@ -238,6 +305,7 @@ if (isset($_POST['create_event'])) {
         </span>
         Eventix Organizer
     </a>
+
     <div>
         <a href="dashboard.php" class="btn btn-outline-light btn-sm me-2">Dashboard</a>
         <a href="my-events.php" class="btn btn-light btn-sm me-2">My Events</a>
@@ -249,40 +317,71 @@ if (isset($_POST['create_event'])) {
     <div class="container">
         <div class="row main-card">
 
+            <!-- LEFT PANEL -->
             <div class="col-lg-4 left-panel">
                 <h1>Create a professional event.</h1>
+
                 <p>
-                    Add complete event details, payment rules, volunteer duties, and clear instructions for smooth event coordination.
+                    Add complete event details, payment rules,
+                    volunteer duties, and clear instructions
+                    for smooth event coordination.
                 </p>
+
                 <div class="feature">
                     <i class="fa-solid fa-check-circle"></i>
                     <span>Event date starts only after 2 days.</span>
                 </div>
+
                 <div class="feature">
                     <i class="fa-solid fa-check-circle"></i>
                     <span>User-friendly time slots with total duration.</span>
                 </div>
+
                 <div class="feature">
                     <i class="fa-solid fa-check-circle"></i>
                     <span>Venue with Google Maps location link.</span>
                 </div>
+
                 <div class="feature">
                     <i class="fa-solid fa-check-circle"></i>
                     <span>Professional volunteer payment workflow.</span>
                 </div>
             </div>
 
+            <!-- FORM PANEL -->
             <div class="col-lg-8 form-panel">
+
                 <h3 class="text-center form-title mb-2">Create New Event</h3>
-                <p class="text-center text-muted mb-4">Fill all details professionally before publishing</p>
+                <p class="text-center text-muted mb-4">
+                    Fill all details professionally before publishing
+                </p>
+
+                <?php if ($message != "") { ?>
+                    <script>
+                        Swal.fire({
+                            icon: 'error',
+                            title: 'Oops!',
+                            text: '<?php echo $message; ?>',
+                            confirmButtonColor: '#7c3aed'
+                        });
+                    </script>
+                <?php } ?>
 
                 <form method="POST">
+
+                    <!-- BASIC -->
                     <h5 class="section-heading">Basic Event Details</h5>
+
                     <div class="row">
                         <div class="col-md-8 mb-3">
                             <label>Event Name</label>
-                            <input type="text" name="event_name" class="form-control" placeholder="Example: Tech Fest 2026" required>
+                            <input type="text"
+                                   name="event_name"
+                                   class="form-control"
+                                   placeholder="Example: Tech Fest 2026"
+                                   required>
                         </div>
+
                         <div class="col-md-4 mb-3">
                             <label>Event Type</label>
                             <select name="event_type" class="form-select" required>
@@ -298,73 +397,136 @@ if (isset($_POST['create_event'])) {
                         </div>
                     </div>
 
+                    <!-- DATE -->
                     <h5 class="section-heading">Date & Time</h5>
+
                     <div class="row">
                         <div class="col-md-4 mb-3">
                             <label>Event Date</label>
-                            <input type="date" name="event_date" id="event_date" class="form-control" required>
+                            <input type="date"
+                                   name="event_date"
+                                   id="event_date"
+                                   class="form-control"
+                                   required>
                         </div>
+
                         <div class="col-md-4 mb-3">
                             <label>Start Time</label>
-                            <input type="time" name="start_time" id="start_time" class="form-control" required>
+                            <input type="time"
+                                   name="start_time"
+                                   class="form-control"
+                                   required>
                         </div>
+
                         <div class="col-md-4 mb-3">
                             <label>End Time</label>
-                            <input type="time" name="end_time" id="end_time" class="form-control" required>
+                            <input type="time"
+                                   name="end_time"
+                                   class="form-control"
+                                   required>
                         </div>
                     </div>
-                    <div class="duration-card mb-3" id="duration_display">
-                        Total Event Working Hours: <span class="fw-bold text-secondary">Select start and end timing.</span>
+
+                    <div class="duration-card mb-3">
+                        Total Event Working Hours:
+                        Select professional start and end timing.
                     </div>
 
+                    <!-- LOCATION -->
                     <h5 class="section-heading">Location Details</h5>
+
                     <div class="mb-3">
                         <label>Venue Name</label>
-                        <input type="text" name="venue" class="form-control" placeholder="Example: Main Auditorium" required>
-                    </div>
-                    <div class="mb-3">
-                        <label>Google Maps Link</label>
-                        <input type="url" name="google_map_link" class="form-control" placeholder="https://maps.google.com/...">
+                        <input type="text"
+                               name="venue"
+                               class="form-control"
+                               placeholder="Example: Main Auditorium"
+                               required>
                     </div>
 
+                    <div class="mb-3">
+                        <label>Google Maps Link</label>
+                        <input type="url"
+                               name="google_map_link"
+                               class="form-control"
+                               placeholder="Paste Google Maps share link">
+                    </div>
+
+                    <!-- VOLUNTEERS -->
                     <h5 class="section-heading">Volunteer Requirements</h5>
+
                     <div class="row">
                         <div class="col-md-6 mb-3">
                             <label>Required Volunteers</label>
-                            <input type="number" name="required_volunteers" class="form-control" min="1" placeholder="Minimum 1" required>
+                            <input type="number"
+                                   name="required_volunteers"
+                                   class="form-control"
+                                   min="1"
+                                   required>
                         </div>
+
                         <div class="col-md-6 mb-3">
                             <label>Volunteer Payment Per Person (₹)</label>
-                            <input type="number" name="volunteer_payment" class="form-control" min="0" placeholder="Enter 0 if unpaid" required>
+                            <input type="number"
+                                   name="volunteer_payment"
+                                   class="form-control"
+                                   min="0"
+                                   required>
                         </div>
                     </div>
+
                     <div class="mb-3">
                         <label>Volunteer Duties</label>
-                        <textarea name="volunteer_duties" class="form-control" placeholder="Registration desk, stage support, crowd control..." required></textarea>
+                        <textarea name="volunteer_duties"
+                                  class="form-control"
+                                  placeholder="Registration desk, stage support, crowd control..."
+                                  required></textarea>
                     </div>
-
+                                        <!-- CONTACT -->
                     <h5 class="section-heading">Contact & Instructions</h5>
+
                     <div class="row">
                         <div class="col-md-6 mb-3">
                             <label>Contact Person</label>
-                            <input type="text" name="contact_person" class="form-control" placeholder="Organizer full name" required>
+                            <input type="text"
+                                   name="contact_person"
+                                   class="form-control"
+                                   placeholder="Organizer full name"
+                                   required>
                         </div>
+
                         <div class="col-md-6 mb-3">
                             <label>Contact Phone</label>
-                            <input type="text" name="contact_phone" id="contact_phone" maxlength="10" class="form-control" placeholder="10 digit mobile number" required>
+                            <input type="text"
+                                   name="contact_phone"
+                                   maxlength="10"
+                                   class="form-control"
+                                   placeholder="10 digit mobile number"
+                                   required>
                         </div>
                     </div>
+
                     <div class="mb-3">
                         <label>Special Instructions</label>
-                        <textarea name="instructions" class="form-control" placeholder="Volunteers should report 30 mins early, wear ID card..." required></textarea>
+                        <textarea name="instructions"
+                                  class="form-control"
+                                  placeholder="Volunteers should report 30 mins early, wear ID card..."
+                                  required></textarea>
                     </div>
 
+                    <!-- DESCRIPTION -->
                     <h5 class="section-heading">Event Description</h5>
+
                     <div class="mb-4">
-                        <textarea name="description" class="form-control" placeholder="Write full event description professionally..." required></textarea>
+                        <textarea name="description"
+                                  class="form-control"
+                                  placeholder="Write full event description professionally..."
+                                  required></textarea>
                     </div>
 
+                    <!-- PAYMENT -->
                     <h5 class="section-heading">Volunteer Payment Management</h5>
+
                     <div class="row">
                         <div class="col-md-6 mb-3">
                             <label>Payment Release Schedule</label>
@@ -376,6 +538,7 @@ if (isset($_POST['create_event'])) {
                                 <option>After Organizer Approval</option>
                             </select>
                         </div>
+
                         <div class="col-md-6 mb-3">
                             <label>Organizer Payment Method</label>
                             <select name="payment_method" class="form-select" required>
@@ -389,16 +552,22 @@ if (isset($_POST['create_event'])) {
 
                     <div class="payment-note mb-4">
                         <strong>Volunteer Payment Workflow:</strong><br>
-                        Volunteers register for the event and track instructions. Organizer reviews attendance records and coordinates payouts upon event execution completion.
+                        Volunteers register for the event and upload their personal
+                        payment QR scanner in volunteer dashboard. Organizer reviews
+                        attendance and sends payment after successful event completion.
                     </div>
 
-                    <button type="submit" name="create_event" class="btn btn-main w-100">
+                    <!-- SUBMIT -->
+                    <button type="submit"
+                            name="create_event"
+                            class="btn btn-main w-100">
                         <i class="fa-solid fa-paper-plane me-2"></i>
                         Publish Event Professionally
                     </button>
-                </form>
-            </div>
 
+                </form>
+
+            </div>
         </div>
     </div>
 </section>
@@ -407,70 +576,12 @@ if (isset($_POST['create_event'])) {
     © 2026 Eventix | Premium Organizer Event Creation
 </footer>
 
-<?php if ($message != "") { ?>
-    <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            Swal.fire({
-                icon: 'error',
-                title: 'Validation Error',
-                text: '<?php echo addslashes($message); ?>',
-                confirmButtonColor: '#7c3aed'
-            });
-        });
-    </script>
-<?php } ?>
-
 <script>
-document.addEventListener('DOMContentLoaded', function() {
-    const dateInput = document.getElementById("event_date");
-    if (dateInput) {
-        const minDate = new Date();
-        minDate.setDate(minDate.getDate() + 2);
-        dateInput.min = minDate.toISOString().split("T")[0];
-    }
-
-    const phoneInput = document.getElementById("contact_phone");
-    if (phoneInput) {
-        phoneInput.addEventListener('input', function() {
-            this.value = this.value.replace(/[^0-9]/g, '').slice(0, 10);
-        });
-    }
-
-    const startTimeEl = document.getElementById("start_time");
-    const endTimeEl = document.getElementById("end_time");
-    const durationDisplay = document.getElementById("duration_display");
-
-    function calculateHours() {
-        if (!startTimeEl.value || !endTimeEl.value) return;
-
-        const start = startTimeEl.value.split(":");
-        const end = endTimeEl.value.split(":");
-
-        const startMins = parseInt(start[0], 10) * 60 + parseInt(start[1], 10);
-        const endMins = parseInt(end[0], 10) * 60 + parseInt(end[1], 10);
-
-        if (endMins <= startMins) {
-            durationDisplay.innerHTML = `Total Event Working Hours: <span class='text-danger fw-bold'><i class='fa-solid fa-triangle-exclamation me-1'></i> End time must be after start time.</span>`;
-            return;
-        }
-
-        const totalMins = endMins - startMins;
-        const hours = Math.floor(totalMins / 60);
-        const minutes = totalMins % 60;
-
-        let displayString = `${hours} hr${hours !== 1 ? 's' : ''}`;
-        if (minutes > 0) {
-            displayString += ` ${minutes} min${minutes !== 1 ? 's' : ''}`;
-        }
-
-        durationDisplay.innerHTML = `Total Event Working Hours: <span class='text-success fw-bold'><i class='fa-solid fa-clock me-1'></i> ${displayString}</span>`;
-    }
-
-    if (startTimeEl && endTimeEl) {
-        startTimeEl.addEventListener('change', calculateHours);
-        endTimeEl.addEventListener('change', calculateHours);
-    }
-});
+    // Minimum date = today + 2 days
+    const minDate = new Date();
+    minDate.setDate(minDate.getDate() + 2);
+    document.getElementById("event_date").min =
+        minDate.toISOString().split("T")[0];
 </script>
 
 </body>

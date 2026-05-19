@@ -4,6 +4,27 @@ include('../config/db.php');
 
 $message = "";
 
+/*
+IMPORTANT:
+Make sure you have ONE admin user in `users` table:
+
+role = admin
+
+Example SQL:
+INSERT INTO users (name, email, phone, password, role)
+VALUES (
+    'Admin',
+    'admin@eventix.com',
+    '9999999999',
+    '$2y$10$examplehashedpassword',
+    'admin'
+);
+
+Recommended:
+Create admin password using PHP:
+password_hash('admin123', PASSWORD_DEFAULT)
+*/
+
 if (isset($_POST['login'])) {
 
     $email = trim($_POST['email']);
@@ -37,7 +58,6 @@ if (isset($_POST['login'])) {
         } else {
             $message = "Admin account not found.";
         }
-        $stmt->close();
     }
 }
 ?>
@@ -50,8 +70,11 @@ if (isset($_POST['login'])) {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+
+    <link rel="stylesheet"
+          href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
 
     <style>
         body {
@@ -238,7 +261,20 @@ if (isset($_POST['login'])) {
                     Restricted access for authorized administrators only.
                 </div>
 
+                <?php if ($message != "") { ?>
+                    <script>
+                        Swal.fire({
+                            icon: 'error',
+                            title: 'Login Failed!',
+                            text: '<?php echo $message; ?>',
+                            confirmButtonColor: '#2563eb'
+                        });
+                    </script>
+                <?php } ?>
+
                 <form method="POST" autocomplete="off">
+
+                    <!-- Anti browser autofill -->
                     <input type="text" name="fakeuser" style="display:none">
                     <input type="password" name="fakepass" style="display:none">
 
@@ -265,7 +301,7 @@ if (isset($_POST['login'])) {
 
                             <i class="fa-solid fa-eye position-absolute top-50 end-0 translate-middle-y me-3"
                                style="cursor:pointer;"
-                               onclick="togglePassword(this)"></i>
+                               onclick="togglePassword()"></i>
                         </div>
                     </div>
 
@@ -275,6 +311,7 @@ if (isset($_POST['login'])) {
                         <i class="fa-solid fa-right-to-bracket me-2"></i>
                         Login as Admin
                     </button>
+
                 </form>
 
             </div>
@@ -287,31 +324,19 @@ if (isset($_POST['login'])) {
     © 2026 Eventix | Admin Secure Login
 </footer>
 
-<?php if ($message != "") { ?>
-    <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            Swal.fire({
-                icon: 'error',
-                title: 'Login Failed!',
-                text: '<?php echo addslashes($message); ?>',
-                confirmButtonColor: '#2563eb'
-            });
-        });
-    </script>
-<?php } ?>
-
 <script>
-function togglePassword(iconElement) {
+function togglePassword() {
     const field = document.getElementById("password");
+    const icon = document.querySelector(".fa-eye, .fa-eye-slash");
 
     if (field.type === "password") {
         field.type = "text";
-        iconElement.classList.remove("fa-eye");
-        iconElement.classList.add("fa-eye-slash");
+        icon.classList.remove("fa-eye");
+        icon.classList.add("fa-eye-slash");
     } else {
         field.type = "password";
-        iconElement.classList.remove("fa-eye-slash");
-        iconElement.classList.add("fa-eye");
+        icon.classList.remove("fa-eye-slash");
+        icon.classList.add("fa-eye");
     }
 }
 </script>

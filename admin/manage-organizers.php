@@ -7,10 +7,6 @@ if (!isset($_SESSION['admin_id'])) {
     exit();
 }
 
-// Fail-safe check to prevent query crashes if organizer_status column hasn't been migrated yet
-$check_status_col = $conn->query("SHOW COLUMNS FROM users LIKE 'organizer_status'");
-$status_select = ($check_status_col && $check_status_col->num_rows > 0) ? "u.organizer_status" : "'active' AS organizer_status";
-
 $organizers = $conn->query("
     SELECT 
         u.id,
@@ -18,7 +14,7 @@ $organizers = $conn->query("
         u.email,
         u.phone,
         u.created_at,
-        COALESCE($status_select, 'active') AS organizer_status,
+        COALESCE(u.organizer_status, 'active') AS organizer_status,
         COUNT(e.id) AS total_events
     FROM users u
     LEFT JOIN events e ON u.id = e.organizer_id
@@ -40,8 +36,10 @@ function safe($value) {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+    <link rel="stylesheet"
+          href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
 
     <style>
         body {
@@ -211,11 +209,7 @@ function safe($value) {
                                 </td>
 
                                 <td>
-                                    <?php 
-                                    echo (!empty($row['created_at']) && $row['created_at'] != '0000-00-00 00:00:00') 
-                                        ? date("d M Y", strtotime($row['created_at'])) 
-                                        : "Not added"; 
-                                    ?>
+                                    <?php echo !empty($row['created_at']) ? date("d M Y", strtotime($row['created_at'])) : "Not added"; ?>
                                 </td>
 
                                 <td class="text-end">

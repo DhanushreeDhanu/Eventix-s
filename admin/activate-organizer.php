@@ -14,14 +14,13 @@ if (!isset($_GET['id']) || empty($_GET['id'])) {
 
 $organizer_id = intval($_GET['id']);
 
-// Verify organizer exists
-$check = $conn->prepare("SELECT id FROM users WHERE id=? AND role='organizer'");
+$check = $conn->prepare("SELECT id, name, role FROM users WHERE id=? AND role='organizer'");
 $check->bind_param("i", $organizer_id);
 $check->execute();
 $result = $check->get_result();
 
 if ($result->num_rows == 0) {
-    $check->close(); // Clean up connection cursor
+
     echo "
     <!DOCTYPE html>
     <html lang='en'>
@@ -45,13 +44,12 @@ if ($result->num_rows == 0) {
     </html>";
     exit();
 }
-$check->close();
 
-// Update status (Make sure 'organizer_status' column exists in your MySQL table!)
 $stmt = $conn->prepare("UPDATE users SET organizer_status='active' WHERE id=? AND role='organizer'");
 $stmt->bind_param("i", $organizer_id);
 
 if ($stmt->execute()) {
+
     echo "
     <!DOCTYPE html>
     <html lang='en'>
@@ -74,8 +72,9 @@ if ($stmt->execute()) {
         </script>
     </body>
     </html>";
-    exit(); // Added safety exit
+
 } else {
+
     echo "
     <!DOCTYPE html>
     <html lang='en'>
@@ -89,7 +88,7 @@ if ($stmt->execute()) {
             Swal.fire({
                 icon: 'error',
                 title: 'Activation Failed!',
-                text: 'Unable to activate organizer. Error: " . esacpe_string($conn->error) . "',
+                text: 'Unable to activate organizer. Please try again.',
                 confirmButtonColor: '#dc2626'
             }).then(() => {
                 window.location.href='manage-organizers.php';
@@ -97,6 +96,5 @@ if ($stmt->execute()) {
         </script>
     </body>
     </html>";
-    exit(); // Added safety exit
 }
 ?>
