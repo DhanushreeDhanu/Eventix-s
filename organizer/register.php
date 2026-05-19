@@ -3,6 +3,7 @@ session_start();
 include('../config/db.php');
 
 $message = "";
+$alert_type = ""; // Initialized to prevent undefined variable errors in JS
 
 if (isset($_POST['register'])) {
     $name = trim($_POST['name']);
@@ -13,12 +14,16 @@ if (isset($_POST['register'])) {
 
     if (!preg_match("/^[A-Za-z ]+$/", $name)) {
         $message = "Name should contain only letters and spaces.";
+        $alert_type = "error";
     } elseif (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
         $message = "Invalid email address.";
+        $alert_type = "error";
     } elseif ($password !== $confirm_password) {
         $message = "Passwords do not match.";
+        $alert_type = "error";
     } elseif (strlen($password) < 8) {
         $message = "Password must be at least 8 characters.";
+        $alert_type = "error";
     } else {
         $stmt = $conn->prepare("SELECT id FROM users WHERE email = ? LIMIT 1");
         $stmt->bind_param("s", $email);
@@ -27,6 +32,7 @@ if (isset($_POST['register'])) {
 
         if ($result->num_rows > 0) {
             $message = "Email already exists.";
+            $alert_type = "error";
         } else {
             $hashed_password = password_hash($password, PASSWORD_DEFAULT);
 
@@ -37,13 +43,12 @@ if (isset($_POST['register'])) {
             $stmt->bind_param("ssss", $name, $email, $phone, $hashed_password);
 
             if ($stmt->execute()) {
-                echo "<script>
-                    alert('Organizer registered successfully!');
-                    window.location.href='login.php';
-                </script>";
-                exit();
+                // Let SweetAlert handle the success message and routing dynamically below
+                $message = "Organizer registered successfully!";
+                $alert_type = "success";
             } else {
                 $message = "Registration failed.";
+                $alert_type = "error";
             }
         }
     }
@@ -344,17 +349,17 @@ if (isset($_POST['register'])) {
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 
 <script>
-// Check if PHP has any alert messages to display via SweetAlert
-<?php if ($message != "") { ?>
+// SweeAlert event rendering
+<?php if ($message != "" && $alert_type != "") { ?>
     Swal.fire({
         icon: '<?php echo $alert_type; ?>',
         title: '<?php echo ($alert_type == "success") ? "Registration Successful!" : "Registration Failed"; ?>',
         text: '<?php echo $message; ?>',
-        confirmButtonColor: '#2563eb',
+        confirmButtonColor: '#7c3aed',
         confirmButtonText: '<?php echo ($alert_type == "success") ? "Go to Login" : "Try Again"; ?>'
     }).then(() => {
         <?php if ($alert_type == "success") { ?>
-            window.location='login.php';
+            window.location.href = 'login.php';
         <?php } ?>
     });
 <?php } ?>
@@ -383,12 +388,10 @@ function togglePassword(inputId, eyeId) {
 
     if (input.type === "password") {
         input.type = "text";
-        eye.classList.remove("fa-eye");
-        eye.classList.add("fa-eye-slash");
+        eye.className = "fa-solid fa-eye-slash";
     } else {
         input.type = "password";
-        eye.classList.remove("fa-eye-slash");
-        eye.classList.add("fa-eye");
+        eye.className = "fa-solid fa-eye";
     }
 }
 
