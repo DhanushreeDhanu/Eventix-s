@@ -8,16 +8,35 @@ $password = password_hash("admin123", PASSWORD_DEFAULT);
 $role = "admin";
 $status = "active";
 
+// Delete old admin
 $conn->query("DELETE FROM users WHERE email='admin@eventix.com'");
 
-$stmt = $conn->prepare("INSERT INTO users (name, email, phone, password, role, organizer_status) VALUES (?, ?, ?, ?, ?, ?)");
-$stmt->bind_param("ssssss", $name, $email, $phone, $password, $role, $status);
+// Insert admin
+$sql = "INSERT INTO users 
+(name, email, phone, password, role, status)
+VALUES (?, ?, ?, ?, ?, ?)";
+
+$stmt = $conn->prepare($sql);
+
+$stmt->bind_param(
+    "ssssss",
+    $name,
+    $email,
+    $phone,
+    $password,
+    $role,
+    $status
+);
 
 if ($stmt->execute()) {
-    echo "Admin created successfully.<br>";
-    echo "Email: admin@eventix.com<br>";
-    echo "Password: admin123<br>";
+
+    echo "<h2>Admin Created Successfully</h2>";
+
+    echo "Email: admin@eventix.com <br>";
+    echo "Password: admin123";
+
 } else {
-    echo "Error: " . $conn->error;
+
+    echo "Error: " . $stmt->error;
 }
 ?>
