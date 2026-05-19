@@ -2,16 +2,12 @@
 session_start();
 include('../config/db.php');
 
-// Check organizer login
-if (!isset($_SESSION['user_id']) || $_SESSION['role'] != 'organizer') {
-
-    header("Location: ../login.php");
+if (!isset($_SESSION['organizer_id'])) {
+    header("Location: login.php");
     exit();
-
 }
 
-// Organizer ID
-$organizer_id = $_SESSION['user_id'];
+$organizer_id = $_SESSION['organizer_id'];
 
 $sql = "SELECT * FROM events WHERE organizer_id = ? ORDER BY event_date DESC, id DESC";
 $stmt = $conn->prepare($sql);
