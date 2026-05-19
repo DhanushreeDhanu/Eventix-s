@@ -1,238 +1,261 @@
 <?php
 session_start();
-include('../config/db.php');
+include '../config/db.php';
 
 if (!isset($_SESSION['volunteer_id'])) {
     header("Location: login.php");
     exit();
 }
 
-$volunteer_id = $_SESSION['volunteer_id'];
+$volunteer_id = (int)$_SESSION['volunteer_id'];
 
-$events = $conn->query("
-    SELECT e.*, 
-           (SELECT COUNT(*) 
-            FROM volunteer_events ve 
-            WHERE ve.event_id = e.id 
-            AND ve.volunteer_id = '$volunteer_id') AS is_joined
-    FROM events e
-    ORDER BY e.event_date ASC
+$events = mysqli_query($conn, "
+    SELECT * FROM events
+    WHERE status = 'upcoming'
+    ORDER BY event_date ASC
 ");
+
+function value($row, $keys, $default = '') {
+    foreach ($keys as $key) {
+        if (isset($row[$key]) && $row[$key] !== '') {
+            return $row[$key];
+        }
+    }
+    return $default;
+}
 ?>
 
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-    <meta charset="UTF-8">
     <title>Available Events | Eventix</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 
     <style>
         body {
-            min-height: 100vh;
-            background: #0f0c29;
-            font-family: "Segoe UI", sans-serif;
+            margin: 0;
+            font-family: Arial, sans-serif;
+            background: #100b2b;
+            color: #111;
+        }
+
+        .container {
+            width: 90%;
+            margin: 30px auto;
+        }
+
+        h1 {
             color: white;
+            margin-bottom: 25px;
         }
 
-        .wrapper {
-            padding: 55px 0;
-        }
-
-        .page-card {
-            background: rgba(255,255,255,.1);
-            border-radius: 25px;
-            padding: 32px;
-            margin-bottom: 35px;
+        .events-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(380px, 1fr));
+            gap: 25px;
         }
 
         .event-card {
             background: white;
-            color: #111827;
-            border-radius: 25px;
-            padding: 26px;
-            height: 100%;
-        }
-
-        .event-type {
-            padding: 7px 14px;
-            border-radius: 999px;
-            background: rgba(124,58,237,.12);
-            color: #6d28d9;
-            font-weight: 800;
-            font-size: 13px;
-        }
-
-        .info-line {
-            margin-top: 12px;
-            color: #4b5563;
-        }
-
-        .info-line i {
-            width: 24px;
-            color: #7c3aed;
-        }
-
-        .section-box {
-            background: #f8fafc;
-            border: 1px solid #e5e7eb;
+            padding: 28px;
             border-radius: 18px;
+            box-shadow: 0 6px 20px rgba(0,0,0,0.2);
+        }
+
+        .event-card h2 {
+            margin-top: 0;
+            color: #222;
+        }
+
+        .info {
+            margin: 12px 0;
+            font-size: 16px;
+            color: #333;
+        }
+
+        .box {
+            background: #f8f9fa;
+            border: 1px solid #ddd;
             padding: 16px;
-            margin-top: 16px;
-            color: #374151;
+            border-radius: 14px;
+            margin-top: 18px;
             line-height: 1.7;
         }
 
-        .payment-box {
-            background: #f0fdf4;
-            border: 1px solid #bbf7d0;
-            border-radius: 18px;
+        .payment {
+            background: #eafaf0;
+            border: 1px solid #b7efc5;
+            color: #075e2d;
             padding: 16px;
-            margin-top: 16px;
-            color: #166534;
+            border-radius: 14px;
+            margin-top: 18px;
+            line-height: 1.7;
         }
 
-        .btn-main {
-            background: linear-gradient(135deg, #7c3aed, #ec4899);
+        .btn {
+            display: block;
+            width: 100%;
+            margin-top: 20px;
+            padding: 13px;
+            border-radius: 7px;
             border: none;
-            border-radius: 999px;
-            color: white;
-            font-weight: 800;
-            padding: 10px 22px;
+            text-align: center;
+            text-decoration: none;
+            font-weight: bold;
+            cursor: pointer;
         }
 
-        .empty-box {
-            background: rgba(255,255,255,.1);
-            border-radius: 25px;
-            padding: 55px;
-            text-align: center;
+        .join-btn {
+            background: #6c2ff2;
+            color: white;
+        }
+
+        .joined-btn {
+            background: #9aa0a6;
+            color: white;
+        }
+
+        .blocked-btn {
+            background: #ff9800;
+            color: white;
+        }
+
+        .full-btn {
+            background: #dc3545;
+            color: white;
+        }
+
+        .map-btn {
+            display: inline-block;
+            margin-top: 15px;
+            padding: 8px 12px;
+            border: 1px solid #0d6efd;
+            color: #0d6efd;
+            text-decoration: none;
+            border-radius: 6px;
         }
     </style>
 </head>
 
 <body>
 
-<section class="wrapper">
-    <div class="container">
+<div class="container">
+    <h1>Available Events</h1>
 
-        <div class="page-card">
-            <h2>Available Events for Volunteers 🚀</h2>
-            <p class="mb-0">Explore professional events posted by organizers and join opportunities.</p>
-        </div>
+    <div class="events-grid">
 
-        <?php if ($events && $events->num_rows > 0) { ?>
+        <?php while ($row = mysqli_fetch_assoc($events)): ?>
 
-            <div class="row g-4">
+            <?php
+            $event_id = (int)$row['id'];
+            $event_date = value($row, ['event_date']);
+            $required_volunteers = (int)value($row, ['required_volunteers'], 0);
 
-                <?php while ($event = $events->fetch_assoc()) { ?>
+            // CHECK ONLY THIS EVENT JOINED
+            $check_join = $conn->prepare("
+                SELECT id 
+                FROM volunteer_events 
+                WHERE volunteer_id = ? 
+                AND event_id = ? 
+                AND status = 'joined'
+            ");
+            $check_join->bind_param("ii", $volunteer_id, $event_id);
+            $check_join->execute();
+            $joined_result = $check_join->get_result();
+            $is_joined = $joined_result->num_rows > 0;
 
-                    <div class="col-lg-6">
-                        <div class="event-card">
+            // CHECK SAME DATE OTHER EVENT
+            $check_same_date = $conn->prepare("
+                SELECT ve.id
+                FROM volunteer_events ve
+                JOIN events e ON ve.event_id = e.id
+                WHERE ve.volunteer_id = ?
+                AND e.event_date = ?
+                AND ve.event_id != ?
+                AND ve.status = 'joined'
+            ");
+            $check_same_date->bind_param("isi", $volunteer_id, $event_date, $event_id);
+            $check_same_date->execute();
+            $same_date_result = $check_same_date->get_result();
+            $same_date_blocked = $same_date_result->num_rows > 0;
 
-                            <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
-                                <h4 class="fw-bold mb-2">
-                                    <?php echo htmlspecialchars($event['event_name']); ?>
-                                </h4>
+            // CHECK VOLUNTEER LIMIT
+            $count_stmt = $conn->prepare("
+                SELECT COUNT(*) AS total
+                FROM volunteer_events
+                WHERE event_id = ?
+                AND status = 'joined'
+            ");
+            $count_stmt->bind_param("i", $event_id);
+            $count_stmt->execute();
+            $joined_count = (int)$count_stmt->get_result()->fetch_assoc()['total'];
 
-                                <span class="event-type">
-                                    <?php echo htmlspecialchars($event['event_type']); ?>
-                                </span>
-                            </div>
+            $is_full = ($required_volunteers > 0 && $joined_count >= $required_volunteers);
+            ?>
 
-                            <div class="info-line">
-                                <i class="fa-solid fa-calendar-days"></i>
-                                <?php echo date("d M Y", strtotime($event['event_date'])); ?>
-                            </div>
+            <div class="event-card">
 
-                            <div class="info-line">
-                                <i class="fa-solid fa-clock"></i>
-                                <?php echo htmlspecialchars($event['event_time']); ?>
-                            </div>
+                <h2><?php echo htmlspecialchars(value($row, ['event_name', 'name'], 'Event Name')); ?></h2>
 
-                            <div class="info-line">
-                                <i class="fa-solid fa-location-dot"></i>
-                                <?php echo htmlspecialchars($event['venue']); ?>
-                            </div>
+                <p class="info">📅 <?php echo htmlspecialchars($event_date); ?></p>
+                <p class="info">🕘 <?php echo htmlspecialchars(value($row, ['start_time', 'event_time'], '')); ?></p>
+                <p class="info">📍 <?php echo htmlspecialchars(value($row, ['venue', 'venue_name'], '')); ?></p>
+                <p class="info">👥 Required Volunteers: <?php echo $required_volunteers; ?></p>
 
-                            <div class="info-line">
-                                <i class="fa-solid fa-users"></i>
-                                Required Volunteers:
-                                <?php echo htmlspecialchars($event['required_volunteers']); ?>
-                            </div>
+                <div class="box">
+                    <strong>Volunteer Duties:</strong><br>
+                    <?php echo htmlspecialchars(value($row, ['volunteer_duties'], 'Not specified')); ?>
+                </div>
 
-                            <div class="section-box">
-                                <strong>Volunteer Duties:</strong><br>
-                                <?php echo nl2br(htmlspecialchars($event['volunteer_duties'])); ?>
-                            </div>
+                <div class="box">
+                    <strong>Special Instructions:</strong><br>
+                    <?php echo htmlspecialchars(value($row, ['special_instructions'], 'Not specified')); ?>
+                </div>
 
-                            <div class="section-box">
-                                <strong>Special Instructions:</strong><br>
-                                <?php echo nl2br(htmlspecialchars($event['instructions'])); ?>
-                            </div>
+                <div class="payment">
+                    <strong>Volunteer Payment:</strong>
+                    ₹<?php echo htmlspecialchars(value($row, ['volunteer_payment', 'payment_per_person'], '0')); ?> per person<br>
 
-                            <div class="payment-box">
-                                <strong>Volunteer Payment:</strong>
-                                ₹<?php echo htmlspecialchars($event['volunteer_payment']); ?> per person<br>
+                    <strong>Payment Schedule:</strong>
+                    <?php echo htmlspecialchars(value($row, ['payment_schedule'], 'Within 3 Days')); ?><br>
 
-                                <strong>Payment Schedule:</strong>
-                                <?php echo htmlspecialchars($event['payment_timeline']); ?><br>
+                    <strong>Payment Method:</strong>
+                    <?php echo htmlspecialchars(value($row, ['payment_method'], 'UPI Transfer')); ?>
+                </div>
 
-                                <strong>Payment Method:</strong>
-                                <?php echo htmlspecialchars($event['payment_method']); ?>
-                            </div>
+                <?php if (value($row, ['google_map_link']) != ''): ?>
+                    <a class="map-btn" href="<?php echo htmlspecialchars($row['google_map_link']); ?>" target="_blank">
+                        🗺 View Location
+                    </a>
+                <?php endif; ?>
 
-                            <?php if (!empty($event['google_map_link'])) { ?>
-                                <div class="mt-3">
-                                    <a href="<?php echo htmlspecialchars($event['google_map_link']); ?>"
-                                       target="_blank"
-                                       class="btn btn-outline-primary btn-sm">
-                                        <i class="fa-solid fa-map-location-dot me-1"></i>
-                                        View Location
-                                    </a>
-                                </div>
-                            <?php } ?>
+                <?php if ($is_joined): ?>
 
-                            <div class="mt-4">
+                    <button class="btn joined-btn" disabled>✅ Already Joined</button>
 
-                                <?php if ($event['is_joined'] > 0) { ?>
+                <?php elseif ($same_date_blocked): ?>
 
-                                    <button class="btn btn-secondary w-100" disabled>
-                                        <i class="fa-solid fa-check-circle me-2"></i>
-                                        Already Joined
-                                    </button>
+                    <button class="btn blocked-btn" disabled>⚠ Same Date Event Already Joined</button>
 
-                                <?php } else { ?>
+                <?php elseif ($is_full): ?>
 
-                                    <a href="join-event.php?event_id=<?php echo $event['id']; ?>"
-                                       class="btn btn-main w-100">
-                                        <i class="fa-solid fa-handshake-angle me-2"></i>
-                                        Join This Event
-                                    </a>
+                    <button class="btn full-btn" disabled>❌ Volunteer Limit Full</button>
 
-                                <?php } ?>
+                <?php else: ?>
 
-                            </div>
+                    <a class="btn join-btn"
+                       href="join-event.php?event_id=<?php echo $event_id; ?>">
+                        Join Event
+                    </a>
 
-                        </div>
-                    </div>
-
-                <?php } ?>
+                <?php endif; ?>
 
             </div>
 
-        <?php } else { ?>
-
-            <div class="empty-box">
-                <h3>No events available right now.</h3>
-            </div>
-
-        <?php } ?>
+        <?php endwhile; ?>
 
     </div>
-</section>
+</div>
 
 </body>
 </html>

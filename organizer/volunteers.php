@@ -1,380 +1,410 @@
 <?php
 session_start();
-include('../config/db.php');
+include '../config/db.php';
 
 if (!isset($_SESSION['organizer_id'])) {
     header("Location: login.php");
     exit();
 }
 
-$organizer_id = $_SESSION['organizer_id'];
+$organizer_id = (int)$_SESSION['organizer_id'];
 
-if (!isset($_GET['event_id'])) {
-    header("Location: my-events.php");
-    exit();
-}
+$events_sql = "
+    SELECT *
+    FROM events
+    WHERE organizer_id = ?
+    ORDER BY event_date ASC
+";
 
-$event_id = intval($_GET['event_id']);
-
-$event_stmt = $conn->prepare("SELECT * FROM events WHERE id=? AND organizer_id=?");
-$event_stmt->bind_param("ii", $event_id, $organizer_id);
-$event_stmt->execute();
-$event = $event_stmt->get_result()->fetch_assoc();
-
-if (!$event) {
-    header("Location: my-events.php");
-    exit();
-}
-
-$sql = "SELECT 
-            ve.id AS join_id,
-            ve.joined_at,
-            ve.payment_status,
-            ve.volunteer_qr,
-            u.name,
-            u.email,
-            u.phone
-        FROM volunteer_events ve
-        JOIN users u ON ve.volunteer_id = u.id
-        WHERE ve.event_id = ?
-        ORDER BY ve.joined_at DESC";
-
-$stmt = $conn->prepare($sql);
-$stmt->bind_param("i", $event_id);
+$stmt = $conn->prepare($events_sql);
+$stmt->bind_param("i", $organizer_id);
 $stmt->execute();
-$result = $stmt->get_result();
-
-function safe($value) {
-    return !empty($value) ? htmlspecialchars($value) : "Not added";
-}
+$events = $stmt->get_result();
 ?>
 
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Event Volunteers | Eventix</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link rel="stylesheet"
-          href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
-
+    <title>Joined Volunteers</title>
     <style>
+        /* Modern Premium Dark Theme Variables */
+        :root {
+            --bg-main: #0b0f19;
+            --bg-card: #131a26;
+            --bg-nested: #1c2533;
+            --border-color: #243145;
+            
+            --text-title: #ffffff;
+            --text-body: #94a3b8;
+            --text-muted: #64748b;
+            
+            --accent-primary: #6366f1;
+            --accent-hover: #4f46e5;
+            
+            /* Status Accents */
+            --status-joined: #10b981;
+            --status-joined-bg: rgba(16, 185, 129, 0.15);
+            --status-pending: #f59e0b;
+            --status-pending-bg: rgba(245, 158, 11, 0.15);
+            --status-paid: #3b82f6;
+            --status-paid-bg: rgba(59, 130, 246, 0.15);
+        }
+
         body {
-            min-height: 100vh;
-            background:
-                radial-gradient(circle at top left, rgba(124,58,237,.35), transparent 35%),
-                radial-gradient(circle at bottom right, rgba(34,211,238,.22), transparent 30%),
-                linear-gradient(135deg, #050816, #15162c, #4f46e5);
-            font-family: "Segoe UI", sans-serif;
-            color: white;
+            margin: 0;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background-color: var(--bg-main);
+            color: var(--text-body);
+            padding: 40px 20px;
         }
 
-        .navbar {
-            background: rgba(5,8,22,.9);
-            backdrop-filter: blur(15px);
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
         }
 
-        .brand-box {
-            width: 42px;
-            height: 42px;
-            border-radius: 14px;
-            background: linear-gradient(135deg, #7c3aed, #22d3ee);
-            display: inline-grid;
-            place-items: center;
-            margin-right: 10px;
+        /* Top Bar Navigation */
+        .top-navigation {
+            margin-bottom: 24px;
         }
 
-        .wrapper {
-            padding: 50px 0;
-        }
-
-        .hero-card {
-            background: rgba(255,255,255,.1);
-            border: 1px solid rgba(255,255,255,.18);
-            backdrop-filter: blur(18px);
-            border-radius: 30px;
-            padding: 32px;
-            margin-bottom: 35px;
-            box-shadow: 0 25px 70px rgba(0,0,0,.25);
-        }
-
-        .page-title {
-            font-weight: 900;
-        }
-
-        .event-pill {
-            display: inline-block;
-            padding: 8px 16px;
-            border-radius: 999px;
-            background: rgba(34,211,238,.16);
-            color: #67e8f9;
-            font-weight: 800;
-            margin-bottom: 12px;
-        }
-
-        .vol-card {
-            background: rgba(255,255,255,.97);
-            color: #111827;
-            border-radius: 28px;
-            padding: 26px;
-            height: 100%;
-            box-shadow: 0 25px 65px rgba(0,0,0,.24);
-            transition: .3s;
-        }
-
-        .vol-card:hover {
-            transform: translateY(-7px);
-        }
-
-        .avatar {
-            width: 62px;
-            height: 62px;
-            border-radius: 20px;
-            background: linear-gradient(135deg, #7c3aed, #22d3ee);
-            color: white;
-            display: grid;
-            place-items: center;
-            font-size: 25px;
-            font-weight: 900;
-        }
-
-        .info-line {
-            margin-top: 12px;
-            color: #4b5563;
-        }
-
-        .info-line i {
-            width: 24px;
-            color: #7c3aed;
-        }
-
-        .payment-badge {
-            padding: 7px 14px;
-            border-radius: 999px;
-            font-size: 13px;
-            font-weight: 800;
-        }
-
-        .paid {
-            background: #dcfce7;
-            color: #166534;
-        }
-
-        .pending {
-            background: #fef3c7;
-            color: #92400e;
-        }
-
-        .qr-box {
-            margin-top: 16px;
-            background: #f8fafc;
-            border: 1px solid #e5e7eb;
-            border-radius: 20px;
-            padding: 16px;
-            text-align: center;
-        }
-
-        .qr-img {
-            max-width: 150px;
-            max-height: 150px;
-            border-radius: 15px;
-            border: 1px solid #e5e7eb;
-            object-fit: cover;
-        }
-
-        .empty-box {
-            background: rgba(255,255,255,.1);
-            border: 1px solid rgba(255,255,255,.18);
-            border-radius: 30px;
-            padding: 55px;
-            text-align: center;
-        }
-
-        .btn-main {
-            background: linear-gradient(135deg, #7c3aed, #ec4899);
-            border: none;
-            border-radius: 999px;
-            color: white;
-            font-weight: 800;
-            padding: 10px 22px;
+        .back-btn {
+            display: inline-flex;
+            align-items: center;
+            padding: 10px 20px;
+            background: var(--bg-card);
+            color: var(--text-title);
             text-decoration: none;
-            display: inline-block;
+            border-radius: 12px;
+            font-size: 14px;
+            font-weight: 600;
+            border: 1px solid var(--border-color);
+            transition: all 0.2s ease;
         }
 
-        .btn-main:hover {
-            color: white;
-            transform: translateY(-2px);
+        .back-btn:hover {
+            background: var(--bg-nested);
+            border-color: var(--accent-primary);
         }
 
-        footer {
-            background: rgba(5,8,22,.9);
-            color: #9ca3af;
+        /* Header Layout */
+        .header {
+            margin-bottom: 40px;
+        }
+
+        .header h1 {
+            color: var(--text-title);
+            font-size: 36px;
+            font-weight: 800;
+            margin: 0 0 8px 0;
+            letter-spacing: -1px;
+        }
+
+        .header p {
+            margin: 0;
+            color: var(--text-muted);
+            font-size: 16px;
+        }
+
+        /* Main Event Card */
+        .event-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 20px;
+            padding: 32px;
+            margin-bottom: 32px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+        }
+
+        .event-title {
+            color: var(--text-title);
+            font-size: 24px;
+            font-weight: 700;
+            margin: 0 0 16px 0;
+        }
+
+        /* Aligned Meta Items */
+        .event-meta {
+            display: flex;
+            gap: 24px;
+            margin-bottom: 32px;
+            padding-bottom: 20px;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .meta-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 14px;
+            font-weight: 500;
+        }
+
+        .vol-section-title {
+            color: var(--text-title);
+            font-size: 16px;
+            font-weight: 600;
+            margin: 0 0 16px 0;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        /* Volunteer Card Layout */
+        .volunteer-card {
+            background: var(--bg-nested);
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
+            padding: 24px;
+            margin-top: 16px;
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 16px;
+        }
+
+        @media (min-width: 768px) {
+            .volunteer-card {
+                grid-template-columns: 1.5fr 1fr;
+                align-items: start;
+            }
+        }
+
+        .vol-info h4 {
+            color: var(--text-title);
+            font-size: 18px;
+            font-weight: 600;
+            margin: 0 0 12px 0;
+        }
+
+        .vol-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 8px;
+        }
+
+        .vol-grid p {
+            margin: 0;
+            font-size: 14px;
+        }
+
+        .vol-grid strong {
+            color: var(--text-muted);
+            font-weight: 400;
+            margin-right: 4px;
+        }
+
+        /* Refined Status Pill Badges */
+        .badge-group {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 14px;
+        }
+
+        .badge {
+            font-size: 12px;
+            font-weight: 600;
+            padding: 6px 14px;
+            border-radius: 30px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            display: inline-flex;
+            align-items: center;
+        }
+
+        .badge.joined, .badge.approved, .badge.marked {
+            background: var(--status-joined-bg);
+            color: var(--status-joined);
+        }
+
+        .badge.pending {
+            background: var(--status-pending-bg);
+            color: var(--status-pending);
+        }
+
+        .badge.paid {
+            background: var(--status-paid-bg);
+            color: var(--status-paid);
+        }
+
+        /* Action UI Buttons Row */
+        .vol-actions {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            justify-content: flex-end;
+            height: 100%;
+        }
+
+        @media (min-width: 768px) {
+            .vol-actions {
+                align-items: flex-end;
+            }
+        }
+
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 10px 18px;
+            border-radius: 10px;
+            font-size: 13px;
+            font-weight: 600;
+            text-decoration: none;
+            transition: all 0.2s ease;
+            width: 100%;
+            max-width: 200px;
             text-align: center;
-            padding: 15px;
-            margin-top: 40px;
+        }
+
+        .btn-green {
+            background: var(--status-joined);
+            color: #000;
+        }
+
+        .btn-green:hover {
+            background: #059669;
+            transform: translateY(-1px);
+        }
+
+        .btn-orange {
+            background: transparent;
+            border: 1px solid var(--status-pending);
+            color: var(--status-pending);
+        }
+
+        .btn-orange:hover {
+            background: var(--status-pending-bg);
+            transform: translateY(-1px);
+        }
+
+        /* Clean Empty Feedback State */
+        .empty {
+            background: rgba(245, 158, 11, 0.05);
+            border: 1px dashed var(--status-pending);
+            color: var(--status-pending);
+            padding: 24px;
+            border-radius: 14px;
+            text-align: center;
+            font-size: 14px;
+            font-weight: 500;
         }
     </style>
 </head>
-
 <body>
 
-<nav class="navbar navbar-dark px-4 py-3">
-    <a class="navbar-brand fw-bold d-flex align-items-center" href="dashboard.php">
-        <span class="brand-box">
-            <i class="fa-solid fa-bolt"></i>
-        </span>
-        Eventix Organizer
-    </a>
+<div class="container">
 
-    <div>
-        <a href="dashboard.php" class="btn btn-outline-light btn-sm me-2">Dashboard</a>
-        <a href="my-events.php" class="btn btn-light btn-sm me-2">My Events</a>
-        <a href="logout.php" class="btn btn-danger btn-sm">Logout</a>
+    <div class="top-navigation">
+        <a href="dashboard.php" class="back-btn">← Back to Dashboard</a>
     </div>
-</nav>
 
-<section class="wrapper">
-    <div class="container">
+    <div class="header">
+        <h1>My Events 🎉</h1>
+        <p>Manage and monitor your project volunteers updates seamlessly.</p>
+    </div>
 
-        <div class="hero-card">
-            <span class="event-pill">
-                <i class="fa-solid fa-users me-2"></i>
-                Joined Volunteers
-            </span>
+    <?php if ($events->num_rows > 0): ?>
+        <?php while ($event = $events->fetch_assoc()): ?>
 
-            <div class="d-flex justify-content-between align-items-center flex-wrap gap-3">
-                <div>
-                    <h1 class="page-title mb-2">
-                        <?php echo safe($event['event_name']); ?>
-                    </h1>
-                    <p class="text-light mb-0">
-                        View volunteers registered for this event and manage payment details.
-                    </p>
+            <?php
+            $event_id = (int)$event['id'];
+
+            $vol_sql = "
+                SELECT 
+                    ve.id AS registration_id,
+                    ve.status AS join_status,
+                    ve.attendance_status,
+                    ve.payment_status,
+                    ve.joined_at,
+                    v.full_name AS volunteer_name,
+                    v.email AS volunteer_email,
+                    v.phone AS volunteer_mobile
+                FROM volunteer_events ve
+                JOIN volunteers v ON ve.volunteer_id = v.id
+                WHERE ve.event_id = ?
+                AND ve.status IN ('joined','approved')
+                ORDER BY ve.joined_at DESC
+            ";
+
+            $vol_stmt = $conn->prepare($vol_sql);
+            $vol_stmt->bind_param("i", $event_id);
+            $vol_stmt->execute();
+            $volunteers = $vol_stmt->get_result();
+
+            $joined_count = $volunteers->num_rows;
+            ?>
+
+            <div class="event-card">
+                <h2 class="event-title"><?php echo htmlspecialchars($event['event_name']); ?></h2>
+
+                <div class="event-meta">
+                    <div class="meta-item"><span>📅</span> <?php echo htmlspecialchars($event['event_date']); ?></div>
+                    <div class="meta-item"><span>📍</span> <?php echo htmlspecialchars($event['venue']); ?></div>
                 </div>
 
-                <a href="my-events.php" class="btn-main">
-                    <i class="fa-solid fa-arrow-left me-2"></i>
-                    Back to Events
-                </a>
+                <div class="vol-box">
+                    <h3 class="vol-section-title">Volunteers Registered (<?php echo $joined_count; ?>)</h3>
+
+                    <?php if ($joined_count > 0): ?>
+                        <?php while ($vol = $volunteers->fetch_assoc()): ?>
+
+                            <div class="volunteer-card">
+                                <div class="vol-info">
+                                    <h4><?php echo htmlspecialchars($vol['volunteer_name']); ?></h4>
+                                    
+                                    <div class="vol-grid">
+                                        <p><strong>Email:</strong> <?php echo htmlspecialchars($vol['volunteer_email']); ?></p>
+                                        <p><strong>Mobile:</strong> <?php echo htmlspecialchars($vol['volunteer_mobile']); ?></p>
+                                        <p><strong>Joined:</strong> <?php echo htmlspecialchars($vol['joined_at']); ?></p>
+                                    </div>
+
+                                    <div class="badge-group">
+                                        <span class="badge joined">
+                                            <?php echo htmlspecialchars($vol['join_status']); ?>
+                                        </span>
+                                        <span class="badge <?php echo htmlspecialchars($vol['attendance_status']); ?>">
+                                            Attendance: <?php echo htmlspecialchars($vol['attendance_status']); ?>
+                                        </span>
+                                        <span class="badge <?php echo htmlspecialchars($vol['payment_status']); ?>">
+                                            Payment: <?php echo htmlspecialchars($vol['payment_status']); ?>
+                                        </span>
+                                    </div>
+                                </div>
+
+                                <div class="vol-actions">
+                                    <?php if ($vol['attendance_status'] != 'marked'): ?>
+                                        <a class="btn btn-green"
+                                           href="update-attendance.php?id=<?php echo $vol['registration_id']; ?>">
+                                            Mark Attendance
+                                        </a>
+                                    <?php endif; ?>
+
+                                    <?php if ($vol['payment_status'] != 'paid'): ?>
+                                        <a class="btn btn-orange"
+                                           href="update-payment.php?id=<?php echo $vol['registration_id']; ?>">
+                                            Mark Paid
+                                        </a>
+                                    <?php endif; ?>
+                                </div>
+                            </div>
+
+                        <?php endwhile; ?>
+                    <?php else: ?>
+                        <div class="empty">No volunteers joined yet.</div>
+                    <?php endif; ?>
+                </div>
             </div>
+
+        <?php endwhile; ?>
+    <?php else: ?>
+        <div class="event-card" style="text-align: center;">
+            <h2 style="margin: 0; color: var(--text-muted);">No events created yet.</h2>
         </div>
+    <?php endif; ?>
 
-        <?php if ($result->num_rows > 0) { ?>
-
-            <div class="row g-4">
-                <?php while ($vol = $result->fetch_assoc()) { 
-                    $status = !empty($vol['payment_status']) ? strtolower($vol['payment_status']) : "pending";
-                ?>
-
-                    <div class="col-lg-4 col-md-6">
-                        <div class="vol-card">
-
-                            <div class="d-flex justify-content-between align-items-start">
-                                <div class="d-flex gap-3 align-items-center">
-                                    <div class="avatar">
-                                        <?php echo strtoupper(substr($vol['name'], 0, 1)); ?>
-                                    </div>
-
-                                    <div>
-                                        <h4 class="mb-1">
-                                            <?php echo safe($vol['name']); ?>
-                                        </h4>
-                                        <small class="text-muted">
-                                            Volunteer ID: <?php echo $vol['join_id']; ?>
-                                        </small>
-                                    </div>
-                                </div>
-
-                                <span class="payment-badge <?php echo $status == 'paid' ? 'paid' : 'pending'; ?>">
-                                    <?php echo ucfirst($status); ?>
-                                </span>
-                            </div>
-
-                            <div class="info-line">
-                                <i class="fa-solid fa-envelope"></i>
-                                <?php echo safe($vol['email']); ?>
-                            </div>
-
-                            <div class="info-line">
-                                <i class="fa-solid fa-phone"></i>
-                                <?php echo safe($vol['phone']); ?>
-                            </div>
-
-                            <div class="info-line">
-                                <i class="fa-solid fa-clock"></i>
-                                Joined:
-                                <?php echo date("d M Y, h:i A", strtotime($vol['joined_at'])); ?>
-                            </div>
-
-                            <div class="info-line">
-                                <i class="fa-solid fa-indian-rupee-sign"></i>
-                                Payment:
-                                ₹<?php echo isset($event['volunteer_payment']) ? safe($event['volunteer_payment']) : "0"; ?>
-                            </div>
-
-                            <div class="qr-box">
-                                <strong>
-                                    <i class="fa-solid fa-qrcode me-1"></i>
-                                    Volunteer Payment Scanner
-                                </strong>
-
-                                <div class="mt-3">
-                                    <?php if (!empty($vol['volunteer_qr'])) { ?>
-                                        <img src="../uploads/volunteer_qr/<?php echo htmlspecialchars($vol['volunteer_qr']); ?>"
-                                             class="qr-img"
-                                             alt="Volunteer QR">
-                                    <?php } else { ?>
-                                        <p class="text-muted mb-0">
-                                            No QR uploaded by volunteer.
-                                        </p>
-                                    <?php } ?>
-                                </div>
-                            </div>
-
-                            <div class="d-flex gap-2 mt-4">
-                                <a href="mark-paid.php?id=<?php echo $vol['join_id']; ?>&event_id=<?php echo $event_id; ?>"
-                                   class="btn btn-success btn-sm rounded-pill px-3">
-                                    <i class="fa-solid fa-check me-1"></i>
-                                    Mark Paid
-                                </a>
-
-                                <a href="mailto:<?php echo htmlspecialchars($vol['email']); ?>"
-                                   class="btn btn-outline-primary btn-sm rounded-pill px-3">
-                                    <i class="fa-solid fa-envelope me-1"></i>
-                                    Email
-                                </a>
-                            </div>
-
-                        </div>
-                    </div>
-
-                <?php } ?>
-            </div>
-
-        <?php } else { ?>
-
-            <div class="empty-box">
-                <i class="fa-solid fa-user-slash fa-4x mb-4 text-info"></i>
-                <h3>No Volunteers Joined Yet</h3>
-                <p class="text-light">
-                    Once volunteers join this event, their details will appear here.
-                </p>
-
-                <a href="my-events.php" class="btn-main mt-3">
-                    Back to My Events
-                </a>
-            </div>
-
-        <?php } ?>
-
-    </div>
-</section>
-
-<footer>
-    © 2026 Eventix | Event Volunteers
-</footer>
+</div>
 
 </body>
 </html>

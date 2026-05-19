@@ -22,9 +22,7 @@ $event_count = mysqli_fetch_assoc($event_count_query)['total'];
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-
-    <link rel="stylesheet"
-          href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
 
     <style>
         body {
@@ -62,10 +60,18 @@ $event_count = mysqli_fetch_assoc($event_count_query)['total'];
             text-align: center;
             transition: .3s;
             height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            align-items: center;
         }
 
         .dashboard-card:hover {
             transform: translateY(-8px);
+        }
+
+        .card-content {
+            width: 100%;
         }
 
         .icon-box {
@@ -94,15 +100,12 @@ $event_count = mysqli_fetch_assoc($event_count_query)['total'];
             color: #67e8f9;
         }
 
-        .danger {
-            background: rgba(239,68,68,.18);
-            color: #fca5a5;
-        }
-
         .btn-main {
             border-radius: 999px;
             padding: 10px 24px;
             font-weight: 700;
+            width: fit-content;
+            margin-top: 15px;
         }
 
         .stats-box {
@@ -126,7 +129,6 @@ $event_count = mysqli_fetch_assoc($event_count_query)['total'];
 
 <body>
 
-<!-- Navbar -->
 <nav class="navbar navbar-dark px-4 py-3">
     <a class="navbar-brand fw-bold d-flex align-items-center" href="../index.php">
         <span class="brand-box">
@@ -140,11 +142,9 @@ $event_count = mysqli_fetch_assoc($event_count_query)['total'];
     </div>
 </nav>
 
-<!-- Dashboard -->
 <section class="dashboard-section">
     <div class="container">
 
-        <!-- Welcome -->
         <div class="stats-box">
             <h2>Welcome, <?php echo $organizer_name; ?> 👋</h2>
             <p class="text-light mt-2">
@@ -157,100 +157,55 @@ $event_count = mysqli_fetch_assoc($event_count_query)['total'];
             </h3>
         </div>
 
-        <!-- Dashboard Cards -->
-        <div class="row g-4">
+        <div class="row g-4 justify-content-center">
 
-            <!-- Create Event -->
             <div class="col-md-4">
                 <div class="dashboard-card">
-                    <div class="icon-box purple">
-                        <i class="fa-solid fa-calendar-plus"></i>
+                    <div class="card-content">
+                        <div class="icon-box purple">
+                            <i class="fa-solid fa-calendar-plus"></i>
+                        </div>
+                        <h4>Create Event</h4>
+                        <p class="text-light-50">
+                            Add new event details, date, venue, and volunteer needs.
+                        </p>
                     </div>
-
-                    <h4>Create Event</h4>
-                    <p class="text-light">
-                        Add new event details, date, venue, and volunteer needs.
-                    </p>
-
-                    <a href="create-event.php"
-                       class="btn btn-primary btn-main">
+                    <a href="create-event.php" class="btn btn-primary btn-main">
                         Open
                     </a>
                 </div>
             </div>
 
-            <!-- My Events -->
             <div class="col-md-4">
                 <div class="dashboard-card">
-                    <div class="icon-box green">
-                        <i class="fa-solid fa-list-check"></i>
+                    <div class="card-content">
+                        <div class="icon-box green">
+                            <i class="fa-solid fa-list-check"></i>
+                        </div>
+                        <h4>My Events</h4>
+                        <p class="text-light-50">
+                            View and manage all created events.
+                        </p>
                     </div>
-
-                    <h4>My Events</h4>
-                    <p class="text-light">
-                        View and manage all created events.
-                    </p>
-
-                    <a href="my-events.php"
-                       class="btn btn-success btn-main">
+                    <a href="my-events.php" class="btn btn-success btn-main">
                         Open
                     </a>
                 </div>
             </div>
 
-            <!-- Volunteers -->
             <div class="col-md-4">
                 <div class="dashboard-card">
-                    <div class="icon-box cyan">
-                        <i class="fa-solid fa-users"></i>
+                    <div class="card-content">
+                        <div class="icon-box cyan">
+                            <i class="fa-solid fa-users"></i>
+                        </div>
+                        <h4>View Volunteers</h4>
+                        <p class="text-light-50">
+                            See volunteers joined for your events.
+                        </p>
                     </div>
-
-                    <h4>View Volunteers</h4>
-                    <p class="text-light">
-                        See volunteers joined for your events.
-                    </p>
-
-                    <a href="volunteers.php"
-                       class="btn btn-info btn-main">
+                    <a href="volunteers.php" class="btn btn-info btn-main">
                         Open
-                    </a>
-                </div>
-            </div>
-
-            <!-- Profile -->
-            <div class="col-md-6">
-                <div class="dashboard-card">
-                    <div class="icon-box purple">
-                        <i class="fa-solid fa-user"></i>
-                    </div>
-
-                    <h4>Organizer Profile</h4>
-                    <p class="text-light">
-                        View your organizer account details.
-                    </p>
-
-                    <a href="#"
-                       class="btn btn-secondary btn-main">
-                        View
-                    </a>
-                </div>
-            </div>
-
-            <!-- Logout -->
-            <div class="col-md-6">
-                <div class="dashboard-card">
-                    <div class="icon-box danger">
-                        <i class="fa-solid fa-right-from-bracket"></i>
-                    </div>
-
-                    <h4>Logout</h4>
-                    <p class="text-light">
-                        Securely logout from your organizer account.
-                    </p>
-
-                    <a href="logout.php"
-                       class="btn btn-danger btn-main">
-                        Logout
                     </a>
                 </div>
             </div>
@@ -265,4 +220,4 @@ $event_count = mysqli_fetch_assoc($event_count_query)['total'];
 </footer>
 
 </body>
-</html> 
+</html>

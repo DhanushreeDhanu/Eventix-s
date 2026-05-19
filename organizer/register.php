@@ -3,6 +3,7 @@ session_start();
 include('../config/db.php');
 
 $message = "";
+$alert_type = ""; // 1. Initialized the alert type
 
 if (isset($_POST['register'])) {
     $name = trim($_POST['name']);
@@ -13,12 +14,16 @@ if (isset($_POST['register'])) {
 
     if (!preg_match("/^[A-Za-z ]+$/", $name)) {
         $message = "Name should contain only letters and spaces.";
+        $alert_type = "error";
     } elseif (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
         $message = "Invalid email address.";
+        $alert_type = "error";
     } elseif ($password !== $confirm_password) {
         $message = "Passwords do not match.";
+        $alert_type = "error";
     } elseif (strlen($password) < 8) {
         $message = "Password must be at least 8 characters.";
+        $alert_type = "error";
     } else {
         $stmt = $conn->prepare("SELECT id FROM users WHERE email = ? LIMIT 1");
         $stmt->bind_param("s", $email);
@@ -27,6 +32,7 @@ if (isset($_POST['register'])) {
 
         if ($result->num_rows > 0) {
             $message = "Email already exists.";
+            $alert_type = "error";
         } else {
             $hashed_password = password_hash($password, PASSWORD_DEFAULT);
 
@@ -37,13 +43,12 @@ if (isset($_POST['register'])) {
             $stmt->bind_param("ssss", $name, $email, $phone, $hashed_password);
 
             if ($stmt->execute()) {
-                echo "<script>
-                    alert('Organizer registered successfully!');
-                    window.location.href='login.php';
-                </script>";
-                exit();
+                // 2. Instead of hard redirecting right away, let SweetAlert handle it below
+                $message = "Organizer registered successfully! Your account is pending approval.";
+                $alert_type = "success";
             } else {
                 $message = "Registration failed.";
+                $alert_type = "error";
             }
         }
     }
@@ -344,17 +349,17 @@ if (isset($_POST['register'])) {
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 
 <script>
-// Check if PHP has any alert messages to display via SweetAlert
-<?php if ($message != "") { ?>
+// 3. Pop up SweetAlert smoothly based on what happened in PHP
+<?php if (!empty($message)) { ?>
     Swal.fire({
         icon: '<?php echo $alert_type; ?>',
-        title: '<?php echo ($alert_type == "success") ? "Registration Successful!" : "Registration Failed"; ?>',
-        text: '<?php echo $message; ?>',
-        confirmButtonColor: '#2563eb',
-        confirmButtonText: '<?php echo ($alert_type == "success") ? "Go to Login" : "Try Again"; ?>'
+        title: '<?php echo ($alert_type === "success") ? "Registration Successful!" : "Registration Failed"; ?>',
+        text: '<?php echo addslashes($message); ?>',
+        confirmButtonColor: '#7c3aed',
+        confirmButtonText: '<?php echo ($alert_type === "success") ? "Go to Login" : "Try Again"; ?>'
     }).then(() => {
-        <?php if ($alert_type == "success") { ?>
-            window.location='login.php';
+        <?php if ($alert_type === "success") { ?>
+            window.location.href = 'login.php';
         <?php } ?>
     });
 <?php } ?>

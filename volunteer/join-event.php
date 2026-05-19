@@ -1,39 +1,135 @@
 <?php
+error_reporting(E_ALL);
+ini_set('display_errors', 1);
+
 session_start();
-require_once '../config/db.php';
-require_once '../includes/functions.php';
-if(!isset($_SESSION['user_id']) || $_SESSION['role']!=='volunteer'){ header('Location: login.php'); exit; }
-$volunteer_id=(int)$_SESSION['user_id'];
-$event_id=(int)($_GET['id'] ?? 0);
+include '../config/db.php';
 
-$conn->begin_transaction();
-try{
-  $stmt=$conn->prepare("SELECT e.*, u.id organizer_id, u.name organizer_name
-    FROM events e JOIN users u ON u.id=e.organizer_id
-    WHERE e.id=? AND e.status='upcoming' AND e.event_date>=CURDATE() FOR UPDATE");
-  $stmt->bind_param('i',$event_id); $stmt->execute();
-  $event=$stmt->get_result()->fetch_assoc();
-  if(!$event) throw new Exception('Event not available.');
+if (!isset($_SESSION['volunteer_id'])) {
+    header("Location: login.php");
+    exit();
+}
 
-  $same=$conn->prepare("SELECT ve.id FROM volunteer_events ve JOIN events e ON e.id=ve.event_id
-    WHERE ve.volunteer_id=? AND e.event_date=? AND ve.status='joined'");
-  $same->bind_param('is',$volunteer_id,$event['event_date']); $same->execute();
-  if($same->get_result()->num_rows>0) throw new Exception('You can join only one event on the same date.');
+$volunteer_id = (int)$_SESSION['volunteer_id'];
 
-  $count=$conn->prepare("SELECT COUNT(*) total FROM volunteer_events WHERE event_id=? AND status='joined'");
-  $count->bind_param('i',$event_id); $count->execute();
-  $joined=(int)$count->get_result()->fetch_assoc()['total'];
-  if($joined >= (int)$event['required_volunteers']) throw new Exception('Volunteer limit is full.');
+if (!isset($_GET['event_id'])) {
+    showAlert('error', 'Invalid Event', 'Event ID missing.', 'available-events.php');
+}
 
-  $ins=$conn->prepare("INSERT INTO volunteer_events(volunteer_id,event_id,attendance_status,payment_status,status,joined_at)
-    VALUES(?,?,'pending','pending','joined',NOW())");
-  $ins->bind_param('ii',$volunteer_id,$event_id); $ins->execute();
-  notify_user($conn,(int)$event['organizer_id'],'New volunteer joined',$_SESSION['name'].' joined '.$event['event_name']);
-  notify_role($conn,'admin','Volunteer joined event',$_SESSION['name'].' joined '.$event['event_name']);
-  $conn->commit();
-  header("Location: joined-events.php?joined=1"); exit;
-}catch(Exception $e){
-  $conn->rollback();
-  header('Location: available-events.php?error='.urlencode($e->getMessage())); exit;
+$event_id = (int)$_GET['event_id'];
+
+try {
+    $conn->begin_transaction();
+
+    $stmt = $conn->prepare("SELECT * FROM events WHERE id = ? FOR UPDATE");
+    $stmt->bind_param("i", $event_id);
+    $stmt->execute();
+    $event = $stmt->get_result()->fetch_assoc();
+
+    if (!$event) {
+        throw new Exception("Event not found.");
+    }
+
+    $event_date = $event['event_date'];
+
+    $same = $conn->prepare("
+        SELECT ve.id
+        FROM volunteer_events ve
+        JOIN events e ON ve.event_id = e.id
+        WHERE ve.volunteer_id = ?
+        AND e.event_date = ?
+        AND ve.status = 'joined'
+    ");
+    $same->bind_param("is", $volunteer_id, $event_date);
+    $same->execute();
+
+    if ($same->get_result()->num_rows > 0) {
+        throw new Exception("You already joined another event on the same date.");
+    }
+
+    $count = $conn->prepare("
+        SELECT COUNT(*) AS total
+        FROM volunteer_events
+        WHERE event_id = ?
+        AND status = 'joined'
+    ");
+    $count->bind_param("i", $event_id);
+    $count->execute();
+    $joined = (int)$count->get_result()->fetch_assoc()['total'];
+
+    if ($joined >= (int)$event['required_volunteers']) {
+        throw new Exception("Volunteer limit reached.");
+    }
+
+    $already = $conn->prepare("
+        SELECT id
+        FROM volunteer_events
+        WHERE volunteer_id = ?
+        AND event_id = ?
+    ");
+    $already->bind_param("ii", $volunteer_id, $event_id);
+    $already->execute();
+
+    if ($already->get_result()->num_rows > 0) {
+        throw new Exception("You already joined this event.");
+    }
+
+    $insert = $conn->prepare("
+        INSERT INTO volunteer_events
+        (volunteer_id, event_id, attendance_status, payment_status, status)
+        VALUES (?, ?, 'pending', 'pending', 'joined')
+    ");
+    $insert->bind_param("ii", $volunteer_id, $event_id);
+    $insert->execute();
+
+    $conn->commit();
+
+    showAlert(
+        'success',
+        'Joined Successfully!',
+        'You have joined the event successfully.',
+        'joined-events.php'
+    );
+
+} catch (Exception $e) {
+    if ($conn->errno === 0) {
+        $conn->rollback();
+    }
+
+    showAlert(
+        'error',
+        'Cannot Join Event',
+        $e->getMessage(),
+        'available-events.php'
+    );
+}
+
+function showAlert($icon, $title, $message, $redirect) {
+    $title = addslashes($title);
+    $message = addslashes($message);
+    $redirect = addslashes($redirect);
+
+    echo "
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>Eventix</title>
+        <script src='https://cdn.jsdelivr.net/npm/sweetalert2@11'></script>
+    </head>
+    <body>
+        <script>
+            Swal.fire({
+                icon: '$icon',
+                title: '$title',
+                text: '$message',
+                confirmButtonText: 'OK'
+            }).then(() => {
+                window.location.href = '$redirect';
+            });
+        </script>
+    </body>
+    </html>
+    ";
+    exit();
 }
 ?>
