@@ -10,7 +10,7 @@ $status = "active";
 
 $conn->query("DELETE FROM users WHERE email='admin@eventix.com'");
 
-$stmt = $conn->prepare("INSERT INTO users (name, email, phone, password, role, status) VALUES (?, ?, ?, ?, ?, ?)");
+$stmt = $conn->prepare("INSERT INTO users (name, email, phone, password, role, organizer_status) VALUES (?, ?, ?, ?, ?, ?)");
 $stmt->bind_param("ssssss", $name, $email, $phone, $password, $role, $status);
 
 if ($stmt->execute()) {
